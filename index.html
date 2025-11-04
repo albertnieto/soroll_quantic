@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quantum Qubit Visualization</title>
+    <link rel="stylesheet" href="src/css/styles.css">
+</head>
+<body>
+    <div id="canvas"></div>
+    
+    <div id="quantum-state">
+        <h2>Quantum State</h2>
+        <div id="qubit-states"></div>
+    </div>
+    
+    <div id="circuit-panel">
+        <h2>Circuit</h2>
+        <img id="circuit-diagram-img" src="" alt="Circuit" style="display:none;width:100%;border-radius:5px;">
+        <div id="circuit-diagram" style="padding:10px;background:#001111;border-radius:5px;font-size:10px;">
+            <div>H → Q0</div>
+            <div>CNOT → Q0,Q1</div>
+            <div>H → Q2</div>
+            <div>CNOT → Q2,Q3</div>
+            <div>RY(0.5) → Q0</div>
+            <div>RY(0.5) → Q2</div>
+        </div>
+        <div id="circuit-control" style="margin-top:15px;">
+            <h2>Circuit Control</h2>
+            <div id="circuit-progress">
+                <div id="circuit-progress-bar"></div>
+            </div>
+            <div id="current-gate">No gate executed</div>
+            <button id="next-gate">Next Gate</button>
+            <button id="reset-circuit">Reset Circuit</button>
+        </div>
+    </div>
+    
+    <div id="controls">
+        <h2>Mic Controls</h2>
+        <div id="mic-controls"></div>
+        <button id="reset">Reset</button>
+    </div>
+
+    <div id="info">
+        <div>Quantum Circuit Visualization</div>
+        <div id="state-info"></div>
+    </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+    <script type="module" src="src/js/main.js"></script>
+</body>
+</html>

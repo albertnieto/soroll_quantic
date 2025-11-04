@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quantum Qubit Visualization</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { overflow: hidden; font-family: 'Courier New', monospace; background: #000; }
+        #canvas { display: block; }
+        #controls {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 10px;
+            border: 1px solid #00ffff;
+            color: #00ffff;
+            min-width: 300px;
+        }
+        .mic-control {
+            margin: 15px 0;
+            padding: 10px;
+            border: 1px solid #004444;
+            border-radius: 5px;
+        }
+        .mic-control h3 {
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+        input[type="range"] {
+            width: 100%;
+            margin: 5px 0;
+        }
+        .value-display {
+            text-align: right;
+            font-size: 12px;
+            color: #00ff00;
+        }
+        .threshold-indicator {
+            height: 5px;
+            background: #00ff00;
+            border-radius: 2px;
+            transition: all 0.3s;
+        }
+        .threshold-indicator.breach {
+            background: #ff0000;
+        }
+        #info {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            color: #00ffff;
+            font-size: 12px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 5px;
+            border: 1px solid #00ffff;
+        }
+        button {
+            background: #004444;
+            color: #00ffff;
+            border: 1px solid #00ffff;
+            padding: 8px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 10px;
+            width: 100%;
+        }
+        button:hover {
+            background: #006666;
+        }
+    </style>
+</head>
+<body>
+    <div id="canvas"></div>
+    
+    <div id="controls">
+        <h2>Mic Threshold Controls</h2>
+        <div id="mic-controls"></div>
+        <button id="reset">Reset Circuit</button>
+    </div>
+
+    <div id="info">
+        <div>Quantum Circuit Visualization</div>
+        <div>4 Qubits evolving through time</div>
+        <div id="state-info"></div>
+    </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // Quantum state class
+        class Qubit {
+            constructor(id, position) {
+                this.id = id;
+                this.position = position;
+                this.alpha = Math.cos(Math.random() * Math.PI / 2); // |0⟩ amplitude
+                this.beta = Math.sin(Math.random() * Math.PI / 2);  // |1⟩ amplitude
+                this.phase = Math.random() * Math.PI * 2;
+                this.coherent = true;
+                this.entangledWith = [];
+            }
+
+            evolve(time) {
+                if (this.coherent) {
+                    this.phase += 0.02;
+                    const theta = Math.sin(time * 0.5) * Math.PI / 4;
+                    this.alpha = Math.cos(theta);
+                    this.beta = Math.sin(theta);
+                }
+            }
+
+            collapse(finalState) {
+                this.coherent = false;
+                this.alpha = finalState === 0 ? 1 : 0;
+                this.beta = finalState === 1 ? 1 : 0;
+            }
+
+            getProbability0() {
+                return this.alpha * this.alpha;
+            }
+
+            getProbability1() {
+                return this.beta * this.beta;
+            }
+        }
+
+        // Scene setup
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x000000, 0.05);
+
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 5, 15);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.getElementById('canvas').appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+
+        // Shaders
+        const vertexShader = `
+            varying vec3 vNormal;
+            varying vec3 vPosition;
+            void main() {
+                vNormal = normalize(normalMatrix * normal);
+                vPosition = position;
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }
+        `;
+
+        const fragmentShader = `
+            uniform vec3 color0;
+            uniform vec3 color1;
+            uniform float mixFactor;
+            uniform float time;
+            uniform float coherence;
+            varying vec3 vNormal;
+            varying vec3 vPosition;
+
+            void main() {
+                vec3 baseColor = mix(color0, color1, mixFactor);
+                
+                // Fresnel effect
+                vec3 viewDirection = normalize(cameraPosition - vPosition);
+                float fresnel = pow(1.0 - abs(dot(viewDirection, vNormal)), 3.0);
+                
+                // Pulsing energy
+                float pulse = sin(time * 2.0) * 0.3 + 0.7;
+                
+                // Quantum noise
+                float noise = fract(sin(dot(vPosition.xy, vec2(12.9898, 78.233)) + time) * 43758.5453) * 0.1;
+                
+                vec3 glow = baseColor * (fresnel * 2.0 + 0.5) * pulse * coherence;
+                glow += vec3(0.3, 0.6, 1.0) * fresnel * coherence;
+                
+                gl_FragColor = vec4(glow + noise, 0.9);
+            }
+        `;
+
+        // Create qubits
+        const qubits = [];
+        const qubitMeshes = [];
+        const positions = [
+            new THREE.Vector3(-6, 0, 0),
+            new THREE.Vector3(-2, 0, 0),
+            new THREE.Vector3(2, 0, 0),
+            new THREE.Vector3(6, 0, 0)
+        ];
+
+        positions.forEach((pos, i) => {
+            const qubit = new Qubit(i, pos);
+            qubits.push(qubit);
+
+            const geometry = new THREE.SphereGeometry(1, 64, 64);
+            const material = new THREE.ShaderMaterial({
+                vertexShader,
+                fragmentShader,
+                uniforms: {
+                    color0: { value: new THREE.Color(0x0066ff) },
+                    color1: { value: new THREE.Color(0xff0066) },
+                    mixFactor: { value: 0.5 },
+                    time: { value: 0 },
+                    coherence: { value: 1.0 }
+                },
+                transparent: true,
+                side: THREE.DoubleSide
+            });
+
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.position.copy(pos);
+            scene.add(mesh);
+            qubitMeshes.push(mesh);
+
+            // Outer glow
+            const glowGeometry = new THREE.SphereGeometry(1.3, 32, 32);
+            const glowMaterial = new THREE.ShaderMaterial({
+                vertexShader,
+                fragmentShader,
+                uniforms: {
+                    color0: { value: new THREE.Color(0x0066ff) },
+                    color1: { value: new THREE.Color(0xff0066) },
+                    mixFactor: { value: 0.5 },
+                    time: { value: 0 },
+                    coherence: { value: 0.3 }
+                },
+                transparent: true,
+                side: THREE.BackSide,
+                blending: THREE.AdditiveBlending
+            });
+            const glowMesh = new THREE.Mesh(glowGeometry, glowMaterial);
+            mesh.add(glowMesh);
+        });
+
+        // Entanglement setup (0-1 and 2-3 entangled)
+        qubits[0].entangledWith.push(1);
+        qubits[1].entangledWith.push(0);
+        qubits[2].entangledWith.push(3);
+        qubits[3].entangledWith.push(2);
+
+        // Entanglement visualization
+        const entanglementLines = [];
+        [[0, 1], [2, 3]].forEach(pair => {
+            const points = [positions[pair[0]], positions[pair[1]]];
+            const geometry = new THREE.BufferGeometry().setFromPoints(points);
+            const material = new THREE.LineBasicMaterial({ 
+                color: 0x00ffff, 
+                transparent: true, 
+                opacity: 0.5 
+            });
+            const line = new THREE.Line(geometry, material);
+            scene.add(line);
+            entanglementLines.push({ line, pair });
+        });
+
+        // Particle system for entanglement
+        const particleSystems = [];
+        entanglementLines.forEach(({ pair }) => {
+            const particleCount = 50;
+            const positions = new Float32Array(particleCount * 3);
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            
+            const material = new THREE.PointsMaterial({
+                color: 0x00ffff,
+                size: 0.1,
+                transparent: true,
+                opacity: 0.6,
+                blending: THREE.AdditiveBlending
+            });
+            
+            const particles = new THREE.Points(geometry, material);
+            scene.add(particles);
+            particleSystems.push({ particles, pair, offset: Math.random() * 100 });
+        });
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0x222222);
+        scene.add(ambientLight);
+
+        const pointLight = new THREE.PointLight(0x00ffff, 1, 100);
+        pointLight.position.set(0, 10, 10);
+        scene.add(pointLight);
+
+        // Mic controls
+        const micThresholds = [0, 0, 0, 0];
+        const THRESHOLD_LIMIT = 0.7;
+
+        const micControlsDiv = document.getElementById('mic-controls');
+        for (let i = 0; i < 4; i++) {
+            const div = document.createElement('div');
+            div.className = 'mic-control';
+            div.innerHTML = `
+                <h3>Mic ${i + 1} (Qubit ${i})</h3>
+                <input type="range" id="mic${i}" min="0" max="100" value="0" step="1">
+                <div class="value-display" id="value${i}">0.00</div>
+                <div class="threshold-indicator" id="indicator${i}"></div>
+            `;
+            micControlsDiv.appendChild(div);
+
+            const slider = div.querySelector(`#mic${i}`);
+            slider.addEventListener('input', (e) => {
+                const value = e.target.value / 100;
+                micThresholds[i] = value;
+                document.getElementById(`value${i}`).textContent = value.toFixed(2);
+                
+                const indicator = document.getElementById(`indicator${i}`);
+                indicator.style.width = (value * 100) + '%';
+                
+                if (value > THRESHOLD_LIMIT && qubits[i].coherent) {
+                    indicator.classList.add('breach');
+                    qubits[i].collapse(Math.random() > 0.5 ? 1 : 0);
+                } else {
+                    indicator.classList.remove('breach');
+                }
+            });
+        }
+
+        document.getElementById('reset').addEventListener('click', () => {
+            qubits.forEach((qubit, i) => {
+                qubit.alpha = Math.cos(Math.random() * Math.PI / 2);
+                qubit.beta = Math.sin(Math.random() * Math.PI / 2);
+                qubit.phase = Math.random() * Math.PI * 2;
+                qubit.coherent = true;
+                
+                document.getElementById(`mic${i}`).value = 0;
+                document.getElementById(`value${i}`).textContent = '0.00';
+                document.getElementById(`indicator${i}`).style.width = '0%';
+                document.getElementById(`indicator${i}`).classList.remove('breach');
+                micThresholds[i] = 0;
+            });
+        });
+
+        // Animation
+        let time = 0;
+        function animate() {
+            requestAnimationFrame(animate);
+            time += 0.016;
+
+            qubits.forEach((qubit, i) => {
+                qubit.evolve(time + i * 0.5);
+
+                const mesh = qubitMeshes[i];
+                const prob1 = qubit.getProbability1();
+                
+                mesh.material.uniforms.mixFactor.value = prob1;
+                mesh.material.uniforms.time.value = time;
+                mesh.material.uniforms.coherence.value = qubit.coherent ? 1.0 : 0.3;
+                
+                mesh.rotation.y = qubit.phase;
+                mesh.rotation.x = Math.sin(time + i) * 0.2;
+
+                const glowMesh = mesh.children[0];
+                glowMesh.material.uniforms.mixFactor.value = prob1;
+                glowMesh.material.uniforms.time.value = time;
+                glowMesh.material.uniforms.coherence.value = qubit.coherent ? 0.3 : 0.1;
+            });
+
+            // Update entanglement particles
+            particleSystems.forEach(({ particles, pair, offset }) => {
+                const positions = particles.geometry.attributes.position.array;
+                const start = qubits[pair[0]].position;
+                const end = qubits[pair[1]].position;
+                
+                for (let i = 0; i < positions.length; i += 3) {
+                    const t = ((i / 3) / (positions.length / 3) + time * 0.1 + offset) % 1;
+                    const x = start.x + (end.x - start.x) * t;
+                    const y = start.y + (end.y - start.y) * t + Math.sin(t * Math.PI * 2 + time) * 0.5;
+                    const z = start.z + (end.z - start.z) * t;
+                    
+                    positions[i] = x;
+                    positions[i + 1] = y;
+                    positions[i + 2] = z;
+                }
+                particles.geometry.attributes.position.needsUpdate = true;
+                
+                const coherent = qubits[pair[0]].coherent && qubits[pair[1]].coherent;
+                particles.material.opacity = coherent ? 0.6 : 0.1;
+            });
+
+            // Update info
+            const stateInfo = qubits.map((q, i) => 
+                `Q${i}: ${q.coherent ? 'Coherent' : 'Collapsed'} |0⟩=${(q.getProbability0()*100).toFixed(0)}%`
+            ).join(' | ');
+            document.getElementById('state-info').textContent = stateInfo;
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>

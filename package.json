@@ -1,0 +1,13 @@
+{
+  "name": "lluc-llum",
+  "version": "1.0.0",
+  "description": "Quantum Qubit Visualization with WebGL and GLSL Shaders",
+  "type": "module",
+  "scripts": {
+    "dev": "python3 server.py",
+    "start": "python3 server.py"
+  },
+  "keywords": ["quantum", "webgl", "three.js", "glsl", "visualization"],
+  "author": "",
+  "license": "MIT"
+}
