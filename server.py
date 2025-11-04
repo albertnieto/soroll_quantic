@@ -18,12 +18,16 @@ class QuantumHandler(http.server.SimpleHTTPRequestHandler):
             self.send_header('Content-type', 'application/json')
             self.end_headers()
             
-            result = subprocess.run(['python3', f'circuits/{circuit_name}.py'], 
+            venv_python = os.path.join(os.getcwd(), '.venv', 'bin', 'python3')
+            python_cmd = venv_python if os.path.exists(venv_python) else 'python3'
+            result = subprocess.run([python_cmd, f'circuits/{circuit_name}.py'], 
                                   capture_output=True, text=True)
             self.wfile.write(result.stdout.encode())
         elif self.path.startswith('/circuits/circuit_diagram.png'):
             if not os.path.exists('circuits/circuit_diagram.png'):
-                subprocess.run(['python3', 'circuits/plot_circuit.py'])
+                venv_python = os.path.join(os.getcwd(), '.venv', 'bin', 'python3')
+                python_cmd = venv_python if os.path.exists(venv_python) else 'python3'
+                subprocess.run([python_cmd, 'circuits/plot_circuit.py'])
             
             if os.path.exists('circuits/circuit_diagram.png'):
                 self.send_response(200)

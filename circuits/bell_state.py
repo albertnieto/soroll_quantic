@@ -32,7 +32,7 @@ circuit_info = {
         {"type": "RY", "wires": [0], "params": [0.5]},
         {"type": "RY", "wires": [2], "params": [0.5]}
     ],
-    "state_vector": state.tolist(),
+    "state_vector": [[s.real, s.imag] for s in state],
     "num_qubits": 4
 }
 

@@ -108,83 +108,59 @@ export const qubitFragmentShader = `
 `;
 
 export const orbitalVertexShader = `
-    varying vec3 vNormal;
-    varying vec3 vPosition;
     varying vec2 vUv;
     
     void main() {
-        vNormal = normalize(normalMatrix * normal);
-        vPosition = (modelMatrix * vec4(position, 1.0)).xyz;
         vUv = uv;
         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
     }
 `;
 
 export const orbitalFragmentShader = `
-    #define PI 3.14159265359
     uniform float uTime;
     uniform float uCoherence;
-    uniform sampler2D uPlasmaTexture;
-    uniform vec3 uOtherQubit0Pos;
-    uniform vec3 uOtherQubit1Pos;
-    uniform vec3 uOtherQubit2Pos;
-    uniform vec3 uOtherQubit0Color;
-    uniform vec3 uOtherQubit1Color;
-    uniform vec3 uOtherQubit2Color;
-    varying vec3 vNormal;
-    varying vec3 vPosition;
+    uniform vec2 resolution;
+    uniform vec3 uEntangledColors[3];
+    uniform float uEntangled[3];
+    uniform vec2 uBlobPos[3];
     varying vec2 vUv;
     
-    ${noiseFunc}
-    
     void main() {
-        vec3 pos = normalize(vPosition);
-        vec2 uv = vec2(
-            atan(pos.z, pos.x) / (2.0 * PI) + 0.5,
-            asin(pos.y) / PI + 0.5
-        );
+        vec2 r = resolution;
+        float t = uTime * 1.5;
+        vec4 o = vec4(0.0);
+        vec2 FC = vUv * r;
         
-        vec3 otherPositions[3];
-        otherPositions[0] = normalize(uOtherQubit0Pos - vPosition);
-        otherPositions[1] = normalize(uOtherQubit1Pos - vPosition);
-        otherPositions[2] = normalize(uOtherQubit2Pos - vPosition);
+        vec2 p = (FC * 2.0 - r) / r.y;
+        vec2 l = vec2(0.0);
+        l += abs(0.7 - dot(p, p));
+        vec2 v = p * (1.0 - l) / 0.2;
         
-        vec3 otherColors[3];
-        otherColors[0] = uOtherQubit0Color;
-        otherColors[1] = uOtherQubit1Color;
-        otherColors[2] = uOtherQubit2Color;
-        
-        vec2 textureCoord = uv;
-        vec3 portalColor = vec3(0.0);
-        float totalEffect = 0.0;
-        
-        for (int i = 0; i < 3; i++) {
-            float alignment = dot(pos, otherPositions[i]);
-            float circle = smoothstep(0.3, 0.85, alignment);
-            
-            float phase = float(i) * PI * 0.66;
-            textureCoord.x += mix(0.0, 1.0, circle * sin(uTime + phase));
-            textureCoord.y += mix(0.0, 1.0, circle * cos(uTime + phase));
-            
-            float glow = pow(circle, 2.0);
-            portalColor += otherColors[i] * glow * 2.0;
-            totalEffect += circle;
+        for(float i = 1.0; i <= 8.0; i++) {
+            v += cos(v.yx * i + vec2(0.0, i) + t) / i + 0.7;
+            o += (sin(vec4(v.x, v.y, v.y, v.x)) + 1.0) * abs(v.x - v.y) * 0.2;
         }
         
-        float noise = snoise(uv * 10.0 + uTime * 0.5);
-        textureCoord += noise * totalEffect * 0.2;
+        o = tanh(exp(p.y * vec4(1.0, -1.0, -2.0, 0.0)) * exp(-4.0 * l.x) / o);
         
-        vec4 plasmaColor = texture2D(uPlasmaTexture, textureCoord);
+        vec2 centered = vUv - 0.5;
+        if(length(centered) > 0.5) discard;
         
-        vec3 viewDir = normalize(cameraPosition - vPosition);
-        float fresnel = pow(1.0 - abs(dot(viewDir, vNormal)), 2.0);
+        float plasmaIntensity = (o.r + o.g + o.b) / 3.0;
+        vec3 baseColor = vec3(plasmaIntensity);
+        vec3 colorOverlay = vec3(0.0);
         
-        vec3 finalColor = mix(plasmaColor.rgb * 0.5, portalColor, totalEffect * 0.9);
-        finalColor += portalColor * 0.5;
-        finalColor += plasmaColor.rgb * fresnel * 0.3;
+        for(int i = 0; i < 3; i++) {
+            if(uEntangled[i] > 0.5) {
+                float dist = distance(vUv, uBlobPos[i]);
+                float blob = smoothstep(0.45, 0.0, dist);
+                blob = pow(blob, 0.6);
+                colorOverlay += uEntangledColors[i] * blob;
+            }
+        }
         
-        float alpha = (totalEffect * 0.8 + fresnel * 0.3 + 0.2) * uCoherence;
+        baseColor += colorOverlay;
         
-        gl_FragColor = vec4(finalColor, alpha);
+        gl_FragColor = vec4(baseColor * uCoherence, uCoherence * 0.6);
     }
 `;

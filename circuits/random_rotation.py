@@ -47,7 +47,7 @@ circuit_info = {
         {"type": "CNOT", "wires": [1, 2], "params": []},
         {"type": "CNOT", "wires": [2, 3], "params": []}
     ],
-    "state_vector": state.tolist(),
+    "state_vector": [[s.real, s.imag] for s in state],
     "num_qubits": 4
 }
 

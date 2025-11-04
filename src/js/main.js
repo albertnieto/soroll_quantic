@@ -78,25 +78,22 @@ function createQubitSphere(position, index) {
 }
 
 function createOrbitalSphere(position, index) {
-    const geometry = new THREE.SphereGeometry(3.5, 64, 64);
+    const geometry = new THREE.CircleGeometry(3.5, 64);
     const material = new THREE.ShaderMaterial({
         vertexShader: orbitalVertexShader,
         fragmentShader: orbitalFragmentShader,
         uniforms: {
             uTime: { value: 0 },
-            uCoherence: { value: 1.0 },
-            uPlasmaTexture: { value: plasmaTarget.texture },
-            uOtherQubit0Pos: { value: new THREE.Vector3() },
-            uOtherQubit1Pos: { value: new THREE.Vector3() },
-            uOtherQubit2Pos: { value: new THREE.Vector3() },
-            uOtherQubit0Color: { value: new THREE.Color() },
-            uOtherQubit1Color: { value: new THREE.Color() },
-            uOtherQubit2Color: { value: new THREE.Color() }
+            uCoherence: { value: 0.0 },
+            resolution: { value: new THREE.Vector2(512, 512) },
+            uEntangledColors: { value: [new THREE.Color(1,1,1), new THREE.Color(1,1,1), new THREE.Color(1,1,1)] },
+            uEntangled: { value: [0, 0, 0] },
+            uBlobPos: { value: [new THREE.Vector2(0.5, 0.5), new THREE.Vector2(0.5, 0.5), new THREE.Vector2(0.5, 0.5)] }
         },
         transparent: true,
         blending: THREE.AdditiveBlending,
         depthWrite: false,
-        side: THREE.BackSide
+        side: THREE.DoubleSide
     });
     
     const mesh = new THREE.Mesh(geometry, material);
@@ -385,6 +382,26 @@ document.getElementById('reset').addEventListener('click', () => {
     updateQuantumStateDisplay();
 });
 
+let shadersEnabled = {
+    plasma: true,
+    qubit: true,
+    orbital: true
+};
+
+document.getElementById('toggle-plasma').addEventListener('change', (e) => {
+    shadersEnabled.plasma = e.target.checked;
+});
+
+document.getElementById('toggle-qubit').addEventListener('change', (e) => {
+    shadersEnabled.qubit = e.target.checked;
+    qubitMeshes.forEach(mesh => mesh.visible = e.target.checked);
+});
+
+document.getElementById('toggle-orbital').addEventListener('change', (e) => {
+    shadersEnabled.orbital = e.target.checked;
+    orbitalMeshes.forEach(mesh => mesh.visible = e.target.checked);
+});
+
 let time = 0;
 function animate() {
     requestAnimationFrame(animate);
@@ -392,10 +409,12 @@ function animate() {
 
     let allCoherent = true;
     
-    plasmaMaterial.uniforms.uTime.value = time;
-    renderer.setRenderTarget(plasmaTarget);
-    renderer.render(rtScene, rtCamera);
-    renderer.setRenderTarget(null);
+    if (shadersEnabled.plasma) {
+        plasmaMaterial.uniforms.uTime.value = time;
+        renderer.setRenderTarget(plasmaTarget);
+        renderer.render(rtScene, rtCamera);
+        renderer.setRenderTarget(null);
+    }
     
     const qubitColors = [];
     
@@ -424,18 +443,34 @@ function animate() {
     });
     
     orbitalMeshes.forEach((orbital, i) => {
-        const otherIndices = [0, 1, 2, 3].filter(j => j !== i);
-        
         orbital.material.uniforms.uTime.value = time + i * 0.5;
-        const isEntangled = qubits[i].coherent && Math.abs(qubits[i].getProbability0() - 0.5) < 0.4;
+        
+        const entangledWith = qubits[i].entangledWith.filter(j => {
+            if(!qubits[j].coherent) return false;
+            const iProb = qubits[i].getProbability0();
+            const jProb = qubits[j].getProbability0();
+            const bothInSuperposition = Math.abs(iProb - 0.5) < 0.4 && Math.abs(jProb - 0.5) < 0.4;
+            const phaseDiff = Math.abs(qubits[i].phase - qubits[j].phase);
+            return bothInSuperposition && phaseDiff < 0.5;
+        }).slice(0, 3);
+        
+        const isEntangled = entangledWith.length > 0;
         orbital.material.uniforms.uCoherence.value = isEntangled ? 1.0 : 0.0;
-        orbital.material.uniforms.uOtherQubit0Pos.value.copy(qubitMeshes[otherIndices[0]].position);
-        orbital.material.uniforms.uOtherQubit1Pos.value.copy(qubitMeshes[otherIndices[1]].position);
-        orbital.material.uniforms.uOtherQubit2Pos.value.copy(qubitMeshes[otherIndices[2]].position);
-        orbital.material.uniforms.uOtherQubit0Color.value.copy(qubitColors[otherIndices[0]]);
-        orbital.material.uniforms.uOtherQubit1Color.value.copy(qubitColors[otherIndices[1]]);
-        orbital.material.uniforms.uOtherQubit2Color.value.copy(qubitColors[otherIndices[2]]);
-
+        
+        for(let j = 0; j < 3; j++) {
+            if(j < entangledWith.length) {
+                const targetIdx = entangledWith[j];
+                orbital.material.uniforms.uEntangledColors.value[j].copy(qubitColors[targetIdx]);
+                orbital.material.uniforms.uEntangled.value[j] = 1.0;
+                
+                const t = time * 0.3 + j * 2.0;
+                const x = 0.5 + Math.sin(t) * 0.3;
+                const y = 0.5 + Math.cos(t * 1.3) * 0.3;
+                orbital.material.uniforms.uBlobPos.value[j].set(x, y);
+            } else {
+                orbital.material.uniforms.uEntangled.value[j] = 0.0;
+            }
+        }
     });
 
     if (time % 1 < 0.016) {
