@@ -21,6 +21,34 @@
             <label><input type="checkbox" id="toggle-orbital" checked> Orbital Shader</label>
         </div>
     </div>
+    
+    <div id="spacing-controls">
+        <h2>Qubit Spacing</h2>
+        <input type="range" id="spacing" min="3" max="10" value="8.5" step="0.5">
+        <div class="value-display" id="spacingValue">8.5</div>
+    </div>
+    
+    <div id="sound-controls">
+        <h2>Quantum Sound</h2>
+        <div class="shader-toggle">
+            <label><input type="checkbox" id="toggle-sound"> Enable Sound</label>
+        </div>
+        <div class="sound-control">
+            <label>Master Volume</label>
+            <input type="range" id="sound-volume" min="0" max="100" value="30" step="1">
+            <div class="value-display" id="volume-value">30%</div>
+        </div>
+        <div class="sound-control">
+            <label>Bass Depth</label>
+            <input type="range" id="sound-bass" min="0" max="100" value="50" step="1">
+            <div class="value-display" id="bass-value">50%</div>
+        </div>
+        <div class="sound-control">
+            <label>Resonance</label>
+            <input type="range" id="sound-resonance" min="0" max="100" value="50" step="1">
+            <div class="value-display" id="resonance-value">50%</div>
+        </div>
+    </div>
 
     <div id="quantum-state">
         <h2>Quantum State</h2>
@@ -28,24 +56,27 @@
     </div>
     
     <div id="circuit-panel">
-        <h2>Circuit</h2>
-        <img id="circuit-diagram-img" src="" alt="Circuit" style="display:none;width:100%;border-radius:5px;">
-        <div id="circuit-diagram" style="padding:10px;background:#001111;border-radius:5px;font-size:10px;">
-            <div>H → Q0</div>
-            <div>CNOT → Q0,Q1</div>
-            <div>H → Q2</div>
-            <div>CNOT → Q2,Q3</div>
-            <div>RY(0.5) → Q0</div>
-            <div>RY(0.5) → Q2</div>
+        <h2>Circuit Control</h2>
+        <select id="circuit-mode" style="width:100%;padding:6px;margin:10px 0;background:#002222;color:#00ffff;border:1px solid #00ffff;border-radius:5px;font-size:11px;">
+            <option value="manual">Manual Control</option>
+            <option value="bell_state">Bell State</option>
+            <option value="phase_evolution">Phase Evolution</option>
+            <option value="random_rotation">Random Rotation</option>
+        </select>
+        
+        <div id="manual-controls" style="display:block;">
+            <div id="manual-qubits"></div>
         </div>
-        <div id="circuit-control" style="margin-top:15px;">
-            <h2>Circuit Control</h2>
+        
+        <div id="circuit-mode-controls" style="display:none;">
+            <img id="circuit-diagram-img" src="" alt="Circuit" style="display:none;width:100%;border-radius:5px;background:white;padding:5px;margin-bottom:10px;">
             <div id="circuit-progress">
                 <div id="circuit-progress-bar"></div>
             </div>
             <div id="current-gate">No gate executed</div>
             <button id="next-gate">Next Gate</button>
             <button id="reset-circuit">Reset Circuit</button>
+            <button id="auto-execute">Auto Execute</button>
         </div>
     </div>
     
@@ -59,6 +90,13 @@
         <div>Quantum Circuit Visualization</div>
         <div id="state-info"></div>
     </div>
+    
+    <div id="view-controls">
+        <button id="toggle-ui">Hide UI</button>
+        <button id="toggle-theme">Light Mode</button>
+    </div>
+    
+    <div id="background-overlay"></div>
 
     <script type="importmap">
     {

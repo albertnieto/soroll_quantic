@@ -51,10 +51,11 @@ export const plasmaFragmentShader = `
                        cos(uv.y * 10.0 + noise2 * 3.0 + uTime);
         
         plasma = (plasma + 1.0) * 0.5;
+        plasma = pow(plasma, 1.5);
         
-        vec3 color1 = vec3(0.1, 0.3, 0.8);
-        vec3 color2 = vec3(0.8, 0.2, 0.5);
-        vec3 color3 = vec3(0.2, 0.8, 0.6);
+        vec3 color1 = vec3(0.0, 0.5, 1.0);
+        vec3 color2 = vec3(1.0, 0.1, 0.7);
+        vec3 color3 = vec3(0.0, 1.0, 0.8);
         
         vec3 color = mix(color1, color2, plasma);
         color = mix(color, color3, noise1 * 0.5 + 0.5);
@@ -79,28 +80,35 @@ export const qubitFragmentShader = `
     uniform vec3 uColor;
     uniform float uCoherence;
     uniform sampler2D uPlasmaTexture;
+    uniform float uPlasmaEnabled;
     varying vec3 vNormal;
     varying vec3 vPosition;
     
     ${noiseFunc}
     
     void main() {
-        vec3 pos = normalize(vPosition);
-        vec2 uv = vec2(
-            atan(pos.z, pos.x) / (2.0 * 3.14159) + 0.5,
-            asin(pos.y) / 3.14159 + 0.5
-        );
-        
-        float noise = snoise(uv * 5.0 + uTime * 0.3);
-        uv.x += noise * sin(uTime * 0.7) * 0.05;
-        uv.y += noise * cos(uTime * 0.7) * 0.05;
-        
-        vec4 plasmaColor = texture2D(uPlasmaTexture, uv);
-        
         vec3 viewDir = normalize(cameraPosition - vPosition);
         float fresnel = pow(1.0 - abs(dot(viewDir, vNormal)), 3.0);
         
-        vec3 finalColor = uColor * plasmaColor.rgb * 1.5 * (1.0 + fresnel);
+        vec3 finalColor;
+        
+        if (uPlasmaEnabled > 0.5) {
+            vec3 pos = normalize(vPosition);
+            vec2 uv = vec2(
+                atan(pos.z, pos.x) / (2.0 * 3.14159) + 0.5,
+                asin(pos.y) / 3.14159 + 0.5
+            );
+            
+            float noise = snoise(uv * 5.0 + uTime * 0.3);
+            uv.x += noise * sin(uTime * 0.7) * 0.05;
+            uv.y += noise * cos(uTime * 0.7) * 0.05;
+            
+            vec4 plasmaColor = texture2D(uPlasmaTexture, uv);
+            finalColor = uColor * plasmaColor.rgb * 2.5 * (1.0 + fresnel);
+        } else {
+            finalColor = uColor * (1.0 + fresnel * 0.5);
+        }
+        
         float alpha = (0.9 + fresnel * 0.1) * uCoherence;
         
         gl_FragColor = vec4(finalColor, alpha);
@@ -123,22 +131,23 @@ export const orbitalFragmentShader = `
     uniform vec3 uEntangledColors[3];
     uniform float uEntangled[3];
     uniform vec2 uBlobPos[3];
+    uniform float uRandomSeed;
     varying vec2 vUv;
     
     void main() {
         vec2 r = resolution;
-        float t = uTime * 1.5;
+        float t = uTime * 1.5 + uRandomSeed;
         vec4 o = vec4(0.0);
         vec2 FC = vUv * r;
         
         vec2 p = (FC * 2.0 - r) / r.y;
         vec2 l = vec2(0.0);
         l += abs(0.7 - dot(p, p));
-        vec2 v = p * (1.0 - l) / 0.2;
+        vec2 v = p * (1.0 - l) / (0.2 + uRandomSeed * 0.05);
         
         for(float i = 1.0; i <= 8.0; i++) {
-            v += cos(v.yx * i + vec2(0.0, i) + t) / i + 0.7;
-            o += (sin(vec4(v.x, v.y, v.y, v.x)) + 1.0) * abs(v.x - v.y) * 0.2;
+            v += cos(v.yx * i + vec2(uRandomSeed * 0.5, i) + t) / i + 0.7;
+            o += (sin(vec4(v.x, v.y, v.y, v.x) + uRandomSeed) + 1.0) * abs(v.x - v.y) * 0.2;
         }
         
         o = tanh(exp(p.y * vec4(1.0, -1.0, -2.0, 0.0)) * exp(-4.0 * l.x) / o);
@@ -147,19 +156,20 @@ export const orbitalFragmentShader = `
         if(length(centered) > 0.5) discard;
         
         float plasmaIntensity = (o.r + o.g + o.b) / 3.0;
+        plasmaIntensity = pow(plasmaIntensity, 0.8) * 1.2;
+        plasmaIntensity = smoothstep(0.4, 0.7, plasmaIntensity);
         vec3 baseColor = vec3(plasmaIntensity);
-        vec3 colorOverlay = vec3(0.0);
         
         for(int i = 0; i < 3; i++) {
             if(uEntangled[i] > 0.5) {
                 float dist = distance(vUv, uBlobPos[i]);
                 float blob = smoothstep(0.45, 0.0, dist);
                 blob = pow(blob, 0.6);
-                colorOverlay += uEntangledColors[i] * blob;
+                baseColor = mix(baseColor, uEntangledColors[i] * plasmaIntensity, blob * 0.8);
             }
         }
         
-        baseColor += colorOverlay;
+        baseColor = baseColor;
         
         gl_FragColor = vec4(baseColor * uCoherence, uCoherence * 0.6);
     }

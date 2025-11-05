@@ -17,6 +17,8 @@ def bell_state_circuit():
 
 bell_state_circuit()
 
-fig, ax = qml.draw_mpl(bell_state_circuit)()
-plt.savefig('circuits/circuit_diagram.png', dpi=150, bbox_inches='tight', facecolor='black')
+fig, ax = qml.draw_mpl(bell_state_circuit, style='black_white')()
+fig.patch.set_facecolor('white')
+ax.set_facecolor('white')
+plt.savefig('circuits/circuit_diagram.png', dpi=150, bbox_inches='tight', facecolor='white', edgecolor='none')
 print("Circuit diagram saved to circuits/circuit_diagram.png")
