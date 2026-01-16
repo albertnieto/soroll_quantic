@@ -1,46 +1,59 @@
-#!/usr/bin/env python3
-import http.server
-import socketserver
-import json
-import subprocess
+from fastapi import FastAPI
+from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 import os
+import uvicorn
+from src.python.quantum_engine import engine
 
-PORT = 8000
+app = FastAPI()
 
-class QuantumHandler(http.server.SimpleHTTPRequestHandler):
-    def do_GET(self):
-        if self.path.startswith('/api/circuit'):
-            circuit_name = 'bell_state'
-            if '?circuit=' in self.path:
-                circuit_name = self.path.split('?circuit=')[1]
-            
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            
-            venv_python = os.path.join(os.getcwd(), '.venv', 'bin', 'python3')
-            python_cmd = venv_python if os.path.exists(venv_python) else 'python3'
-            result = subprocess.run([python_cmd, f'circuits/{circuit_name}.py'], 
-                                  capture_output=True, text=True)
-            self.wfile.write(result.stdout.encode())
-        elif self.path.startswith('/circuits/circuit_diagram.png'):
-            if not os.path.exists('circuits/circuit_diagram.png'):
-                venv_python = os.path.join(os.getcwd(), '.venv', 'bin', 'python3')
-                python_cmd = venv_python if os.path.exists(venv_python) else 'python3'
-                subprocess.run([python_cmd, 'circuits/plot_circuit.py'])
-            
-            if os.path.exists('circuits/circuit_diagram.png'):
-                self.send_response(200)
-                self.send_header('Content-type', 'image/png')
-                self.end_headers()
-                with open('circuits/circuit_diagram.png', 'rb') as f:
-                    self.wfile.write(f.read())
-            else:
-                self.send_error(404)
-        else:
-            super().do_GET()
+# Map circuit names to engine methods
+CIRCUIT_MAP = {
+    "bell_state": engine.get_bell_state,
+    "phase_evolution": engine.get_phase_evolution,
+    "random_rotation": engine.get_random_rotation,
+}
 
-with socketserver.TCPServer(("", PORT), QuantumHandler) as httpd:
-    print(f"Server running at http://localhost:{PORT}/")
-    print("Install dependencies: pip3 install pennylane matplotlib")
-    httpd.serve_forever()
+
+@app.get("/api/circuit")
+async def get_circuit(circuit: str = "bell_state"):
+    if circuit in CIRCUIT_MAP:
+        result = CIRCUIT_MAP[circuit]()
+        return JSONResponse(content=result)
+    return JSONResponse(content={"error": "Circuit not found"}, status_code=404)
+
+
+@app.get("/circuits/circuit_diagram.png")
+async def get_circuit_diagram():
+    diagram_path = "circuits/circuit_diagram.png"
+    if not os.path.exists(diagram_path):
+        import subprocess
+
+        # Generate it once if missing
+        subprocess.run(["python3", "circuits/plot_circuit.py"])
+
+    if os.path.exists(diagram_path):
+        return FileResponse(diagram_path)
+    return JSONResponse(content={"error": "Diagram not found"}, status_code=404)
+
+
+# Serve static files last
+app.mount("/src", StaticFiles(directory="src"), name="src")
+app.mount("/assets", StaticFiles(directory="assets"), name="assets")
+app.mount("/circuits", StaticFiles(directory="circuits"), name="circuits")
+
+
+@app.get("/")
+async def read_index():
+    return FileResponse("index.html")
+
+
+@app.get("/{path:path}")
+async def catch_all(path: str):
+    if os.path.exists(path):
+        return FileResponse(path)
+    return FileResponse("index.html")
+
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000)

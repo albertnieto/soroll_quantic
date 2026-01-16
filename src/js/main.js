@@ -4,6 +4,7 @@ import { Qubit } from './Qubit.js';
 import { plasmaVertexShader, plasmaFragmentShader, qubitVertexShader, qubitFragmentShader, orbitalVertexShader, orbitalFragmentShader } from './shaders.js';
 import { QuantumCircuit } from './quantum_circuit.js';
 import { QuantumSound } from './quantum_sound.js';
+import { MicManager } from './mic_manager.js';
 
 const scene = new THREE.Scene();
 scene.fog = new THREE.FogExp2(0x000000, 0.02);
@@ -26,6 +27,7 @@ const qubitMeshes = [];
 const orbitalMeshes = [];
 const quantumCircuit = new QuantumCircuit();
 const quantumSound = new QuantumSound();
+const micManager = new MicManager();
 
 const plasmaTarget = new THREE.WebGLRenderTarget(1024, 1024);
 const rtCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
@@ -49,7 +51,7 @@ function updateQubitPositions() {
         new THREE.Vector3(qubitSpacing * 0.5, 0, 0),
         new THREE.Vector3(qubitSpacing * 1.5, 0, 0)
     ];
-    
+
     qubitMeshes.forEach((mesh, i) => {
         mesh.position.copy(positions[i]);
         qubits[i].position = positions[i];
@@ -73,11 +75,11 @@ function createQubitSphere(position, index) {
         blending: THREE.AdditiveBlending,
         depthWrite: false
     });
-    
+
     const mesh = new THREE.Mesh(geometry, material);
     mesh.position.copy(position);
     scene.add(mesh);
-    
+
     return mesh;
 }
 
@@ -90,7 +92,7 @@ function createOrbitalSphere(position, index) {
             uTime: { value: 0 },
             uCoherence: { value: 0.0 },
             resolution: { value: new THREE.Vector2(512, 512) },
-            uEntangledColors: { value: [new THREE.Color(1,1,1), new THREE.Color(1,1,1), new THREE.Color(1,1,1)] },
+            uEntangledColors: { value: [new THREE.Color(1, 1, 1), new THREE.Color(1, 1, 1), new THREE.Color(1, 1, 1)] },
             uEntangled: { value: [0, 0, 0] },
             uBlobPos: { value: [new THREE.Vector2(0.5, 0.5), new THREE.Vector2(0.5, 0.5), new THREE.Vector2(0.5, 0.5)] },
             uRandomSeed: { value: Math.random() * 10.0 }
@@ -100,11 +102,11 @@ function createOrbitalSphere(position, index) {
         depthWrite: false,
         side: THREE.DoubleSide
     });
-    
+
     const mesh = new THREE.Mesh(geometry, material);
     mesh.position.copy(position);
     scene.add(mesh);
-    
+
     return mesh;
 }
 
@@ -138,14 +140,14 @@ let currentMode = 'manual';
 const circuitModeSelect = document.getElementById('circuit-mode');
 circuitModeSelect.addEventListener('change', (e) => {
     currentMode = e.target.value;
-    
+
     if (currentMode === 'manual') {
         document.getElementById('manual-controls').style.display = 'block';
         document.getElementById('circuit-mode-controls').style.display = 'none';
     } else {
         document.getElementById('manual-controls').style.display = 'none';
         document.getElementById('circuit-mode-controls').style.display = 'block';
-        
+
         quantumCircuit.reset();
         quantumCircuit.loadCircuit(currentMode).then(() => {
             const img = document.getElementById('circuit-diagram-img');
@@ -180,12 +182,12 @@ const manualQubitsDiv = document.getElementById('manual-qubits');
 for (let i = 0; i < 4; i++) {
     const div = document.createElement('div');
     div.className = 'manual-qubit';
-    
+
     const entangleCheckboxes = [0, 1, 2, 3]
         .filter(j => j !== i)
         .map(j => `<label><input type="checkbox" id="entangle-${i}-${j}"> Q${j}</label>`)
         .join('');
-    
+
     div.innerHTML = `
         <label>Qubit ${i}</label>
         <div style="font-size:9px;margin-bottom:2px;">Alpha (|0⟩)</div>
@@ -200,7 +202,7 @@ for (let i = 0; i < 4; i++) {
         </div>
     `;
     manualQubitsDiv.appendChild(div);
-    
+
     document.getElementById(`manual-alpha${i}`).addEventListener('input', (e) => {
         const alpha = e.target.value / 100;
         const beta = Math.sqrt(1 - alpha * alpha);
@@ -210,14 +212,14 @@ for (let i = 0; i < 4; i++) {
         document.getElementById(`alpha-value${i}`).textContent = alpha.toFixed(2);
         updateQuantumStateDisplay();
     });
-    
+
     document.getElementById(`manual-phase${i}`).addEventListener('input', (e) => {
         const phase = (e.target.value / 100);
         qubits[i].phase = phase;
         document.getElementById(`phase-value${i}`).textContent = phase.toFixed(2);
         updateQuantumStateDisplay();
     });
-    
+
     [0, 1, 2, 3].filter(j => j !== i).forEach(j => {
         document.getElementById(`entangle-${i}-${j}`).addEventListener('change', (e) => {
             if (e.target.checked) {
@@ -250,10 +252,10 @@ for (let i = 0; i < 4; i++) {
         const value = e.target.value / 100;
         micThresholds[i] = value;
         document.getElementById(`value${i}`).textContent = value.toFixed(2);
-        
+
         const indicator = document.getElementById(`indicator${i}`);
         indicator.style.width = (value * 100) + '%';
-        
+
         if (value > THRESHOLD_LIMIT && qubits[i].coherent) {
             indicator.classList.add('breach');
             qubits[i].collapse(Math.random() > 0.5 ? 1 : 0);
@@ -266,7 +268,7 @@ for (let i = 0; i < 4; i++) {
 function getQubitState(qubit) {
     const prob0 = qubit.getProbability0();
     const prob1 = qubit.getProbability1();
-    
+
     if (!qubit.coherent) {
         return prob1 > 0.5 ? 'Collapsed |1⟩' : 'Collapsed |0⟩';
     } else if (Math.abs(prob0 - 1.0) < 0.01) {
@@ -283,7 +285,7 @@ function getQubitState(qubit) {
 function updateQuantumStateDisplay() {
     const statesDiv = document.getElementById('qubit-states');
     statesDiv.innerHTML = '';
-    
+
     qubits.forEach((qubit, i) => {
         const div = document.createElement('div');
         div.className = 'qubit-state';
@@ -294,7 +296,7 @@ function updateQuantumStateDisplay() {
             const otherQubit = qubits[j];
             return otherQubit.coherent && Math.abs(otherQubit.getProbability0() - 0.5) < 0.4;
         }).map(j => `Q${j}`).join(', ');
-        
+
         div.innerHTML = `
             <div class="label">Qubit ${i}</div>
             <div class="value">|0⟩: ${prob0}% | |1⟩: ${prob1}%</div>
@@ -309,11 +311,11 @@ function updateQuantumStateDisplay() {
 function executeNextGate() {
     const gate = quantumCircuit.nextGate();
     if (gate) {
-        document.getElementById('current-gate').textContent = 
+        document.getElementById('current-gate').textContent =
             `Gate: ${gate.type} on qubit(s) ${gate.wires.join(', ')}`;
-        document.getElementById('circuit-progress-bar').style.width = 
+        document.getElementById('circuit-progress-bar').style.width =
             (quantumCircuit.getProgress() * 100) + '%';
-        
+
         if (gate.type === 'INIT') {
             gate.wires.forEach(wire => {
                 qubits[wire].alpha = 1;
@@ -392,7 +394,7 @@ document.getElementById('reset-circuit').addEventListener('click', () => {
 document.getElementById('auto-execute').addEventListener('click', () => {
     autoExecute = !autoExecute;
     document.getElementById('auto-execute').textContent = autoExecute ? 'Stop Auto' : 'Auto Execute';
-    
+
     if (autoExecute) {
         autoExecuteInterval = setInterval(() => {
             if (!executeNextGate()) {
@@ -410,7 +412,7 @@ document.getElementById('reset').addEventListener('click', () => {
         qubit.beta = Math.sin(Math.random() * Math.PI / 2);
         qubit.phase = Math.random() * Math.PI * 2;
         qubit.coherent = true;
-        
+
         document.getElementById(`mic${i}`).value = 0;
         document.getElementById(`value${i}`).textContent = '0.00';
         document.getElementById(`indicator${i}`).style.width = '0%';
@@ -472,6 +474,12 @@ document.getElementById('sound-resonance').addEventListener('input', (e) => {
     quantumSound.setResonance(value / 100);
 });
 
+document.getElementById('start-mic').addEventListener('click', async () => {
+    await micManager.init();
+    document.getElementById('start-mic').textContent = micManager.enabled ? 'Live Mic Active' : 'Retry Mic';
+    document.getElementById('start-mic').style.background = micManager.enabled ? '#007777' : '#440000';
+});
+
 let uiVisible = true;
 document.getElementById('toggle-ui').addEventListener('click', () => {
     uiVisible = !uiVisible;
@@ -492,63 +500,63 @@ function animate() {
     time += 0.016;
 
     let allCoherent = true;
-    
+
     plasmaMaterial.uniforms.uTime.value = time;
     renderer.setRenderTarget(plasmaTarget);
     renderer.render(rtScene, rtCamera);
     renderer.setRenderTarget(null);
-    
+
     const qubitColors = [];
-    
+
     qubits.forEach((qubit, i) => {
         if (!qubit.coherent) allCoherent = false;
 
         const mesh = qubitMeshes[i];
         const prob0 = qubit.getProbability0();
         const prob1 = qubit.getProbability1();
-        
+
         let targetColor;
         if (!qubit.coherent) {
             targetColor = prob1 > 0.5 ? new THREE.Color(1, 1, 1) : new THREE.Color(0.15, 0.15, 0.15);
         } else {
             // Brightness based on |1⟩ probability: 0.15 (dark) to 1.0 (white)
             const brightness = 0.15 + prob1 * 0.85;
-            
+
             // Saturation decreases near pure states for smooth transition
             const superposition = 4 * prob0 * prob1; // Max 1.0 at 50/50, 0.0 at pure states
             const saturation = superposition * 0.8; // 0 to 0.8
-            
+
             const hue = qubit.phase / (Math.PI * 2);
             targetColor = new THREE.Color().setHSL(hue, saturation, brightness * 0.5);
         }
-        
+
         const currentColor = mesh.material.uniforms.uColor.value;
         currentColor.lerp(targetColor, 0.1);
-        
+
         qubitColors.push(currentColor.clone());
-        
+
         mesh.material.uniforms.uTime.value = time + i;
         mesh.material.uniforms.uCoherence.value = qubit.coherent ? 1.0 : 0.3;
     });
-    
+
     orbitalMeshes.forEach((orbital, i) => {
         orbital.material.uniforms.uTime.value = time + i * 0.5;
-        
+
         const entangledWith = qubits[i].entangledWith.filter(j => {
             return qubits[j].coherent;
         }).slice(0, 3);
-        
+
         const isEntangled = entangledWith.length > 0;
         const targetCoherence = isEntangled ? 1.0 : 0.0;
         const currentCoherence = orbital.material.uniforms.uCoherence.value;
         orbital.material.uniforms.uCoherence.value += (targetCoherence - currentCoherence) * 0.05;
-        
-        for(let j = 0; j < 3; j++) {
-            if(j < entangledWith.length) {
+
+        for (let j = 0; j < 3; j++) {
+            if (j < entangledWith.length) {
                 const targetIdx = entangledWith[j];
                 orbital.material.uniforms.uEntangledColors.value[j].copy(qubitColors[targetIdx]);
                 orbital.material.uniforms.uEntangled.value[j] = 1.0;
-                
+
                 const t = time * 0.3 + j * 2.0;
                 const x = 0.5 + Math.sin(t) * 0.3;
                 const y = 0.5 + Math.cos(t * 1.3) * 0.3;
@@ -562,7 +570,31 @@ function animate() {
     if (time % 1 < 0.016) {
         updateQuantumStateDisplay();
     }
-    
+
+    if (micManager.enabled) {
+        micManager.update();
+        for (let i = 0; i < 4; i++) {
+            const energy = micManager.getEnergy(i);
+            micThresholds[i] = energy;
+
+            // Update UI indicators
+            const valueEl = document.getElementById(`value${i}`);
+            const indicatorEl = document.getElementById(`indicator${i}`);
+            const sliderEl = document.getElementById(`mic${i}`);
+
+            if (valueEl) valueEl.textContent = energy.toFixed(2);
+            if (indicatorEl) indicatorEl.style.width = (energy * 100) + '%';
+            if (sliderEl) sliderEl.value = energy * 100;
+
+            if (energy > THRESHOLD_LIMIT && qubits[i].coherent) {
+                if (indicatorEl) indicatorEl.classList.add('breach');
+                qubits[i].collapse(Math.random() > 0.5 ? 1 : 0);
+            } else if (indicatorEl) {
+                indicatorEl.classList.remove('breach');
+            }
+        }
+    }
+
     quantumSound.update(qubits);
 
     controls.update();
