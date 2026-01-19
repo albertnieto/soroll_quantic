@@ -82,13 +82,16 @@ function createParticleSystem() {
     for (let i = 0; i < particleCount; i++) {
         // Distribute particles globablly (scene-wide)
         // Wandering around the whole scene
-        const r = 40.0 * Math.pow(Math.random(), 0.5); // Wider radius (40)
-        const theta = Math.random() * 2.0 * Math.PI;
-        const phi = Math.acos(2.0 * Math.random() - 1.0);
+        // Distribute uniformly along the qubits (X axis)
+        // Cylinder shape: X from -16 to +16, Radius 25
 
-        positions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
-        positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta) * 0.5;
-        positions[i * 3 + 2] = r * Math.cos(phi);
+        positions[i * 3] = (Math.random() - 0.5) * 32.0; // X
+
+        const rCyl = 25.0 * Math.sqrt(Math.random());
+        const theta = Math.random() * 2.0 * Math.PI;
+
+        positions[i * 3 + 1] = rCyl * Math.cos(theta); // Y
+        positions[i * 3 + 2] = rCyl * Math.sin(theta); // Z
 
         randoms[i * 3] = Math.random();
         randoms[i * 3 + 1] = Math.random();

@@ -62,7 +62,7 @@ export const particleVertexShader = `
         if (totalWeight > 0.0) {
             targetPos /= totalWeight;
             // Lerp towards target based on randomness - some particles follow physics, some wander
-            pos = mix(pos, targetPos, 0.05 * sin(time + aRandom.x * 10.0));
+            // pos = mix(pos, targetPos, 0.05 * sin(time + aRandom.x * 10.0));
         }
 
         vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
