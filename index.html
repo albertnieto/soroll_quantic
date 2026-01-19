@@ -1,14 +1,16 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Quantum Qubit Visualization</title>
     <link rel="stylesheet" href="src/css/styles.css">
 </head>
+
 <body>
     <div id="canvas"></div>
-    
+
     <div id="shader-controls">
         <h2>Shader Controls</h2>
         <div class="shader-toggle">
@@ -18,23 +20,28 @@
             <label><input type="checkbox" id="toggle-qubit" checked> Qubit Shader</label>
         </div>
         <div class="shader-toggle">
-            <label><input type="checkbox" id="toggle-orbital" checked> Orbital Shader</label>
+            <label><input type="checkbox" id="toggle-orbital" checked> Particle System</label>
+        </div>
+        <div class="shader-toggle">
+            <label><input type="checkbox" id="toggle-entanglement"> Entanglement Ripples</label>
         </div>
     </div>
-    
+
     <div id="spacing-controls">
         <h2>Qubit Spacing</h2>
         <input type="range" id="spacing" min="3" max="10" value="8.5" step="0.5">
         <div class="value-display" id="spacingValue">8.5</div>
     </div>
-    
+
     <div id="sound-controls">
         <h2>Quantum Sound</h2>
         <div class="shader-toggle">
             <label><input type="checkbox" id="toggle-sound"> Enable Sound</label>
         </div>
         <div class="shader-toggle" style="margin-top:10px;">
-            <button id="start-mic" style="width:100%;padding:8px;background:#004444;color:#00ffff;border:1px solid #00ffff;border-radius:5px;cursor:pointer;font-family:inherit;font-size:11px;">Start Live Mic (Input)</button>
+            <button id="start-mic"
+                style="width:100%;padding:8px;background:#004444;color:#00ffff;border:1px solid #00ffff;border-radius:5px;cursor:pointer;font-family:inherit;font-size:11px;">Start
+                Live Mic (Input)</button>
         </div>
         <div class="sound-control">
             <label>Master Volume</label>
@@ -57,22 +64,24 @@
         <h2>Quantum State</h2>
         <div id="qubit-states"></div>
     </div>
-    
+
     <div id="circuit-panel">
         <h2>Circuit Control</h2>
-        <select id="circuit-mode" style="width:100%;padding:6px;margin:10px 0;background:#002222;color:#00ffff;border:1px solid #00ffff;border-radius:5px;font-size:11px;">
+        <select id="circuit-mode"
+            style="width:100%;padding:6px;margin:10px 0;background:#002222;color:#00ffff;border:1px solid #00ffff;border-radius:5px;font-size:11px;">
             <option value="manual">Manual Control</option>
             <option value="bell_state">Bell State</option>
             <option value="phase_evolution">Phase Evolution</option>
             <option value="random_rotation">Random Rotation</option>
         </select>
-        
+
         <div id="manual-controls" style="display:block;">
             <div id="manual-qubits"></div>
         </div>
-        
+
         <div id="circuit-mode-controls" style="display:none;">
-            <img id="circuit-diagram-img" src="" alt="Circuit" style="display:none;width:100%;border-radius:5px;background:white;padding:5px;margin-bottom:10px;">
+            <img id="circuit-diagram-img" src="" alt="Circuit"
+                style="display:none;width:100%;border-radius:5px;background:white;padding:5px;margin-bottom:10px;">
             <div id="circuit-progress">
                 <div id="circuit-progress-bar"></div>
             </div>
@@ -82,7 +91,7 @@
             <button id="auto-execute">Auto Execute</button>
         </div>
     </div>
-    
+
     <div id="controls">
         <h2>Mic Controls</h2>
         <div id="mic-controls"></div>
@@ -93,12 +102,12 @@
         <div>Quantum Circuit Visualization</div>
         <div id="state-info"></div>
     </div>
-    
+
     <div id="view-controls">
         <button id="toggle-ui">Hide UI</button>
         <button id="toggle-theme">Light Mode</button>
     </div>
-    
+
     <div id="background-overlay"></div>
 
     <script type="importmap">
@@ -111,4 +120,5 @@
     </script>
     <script type="module" src="src/js/main.js"></script>
 </body>
+
 </html>

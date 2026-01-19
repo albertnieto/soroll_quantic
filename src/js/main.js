@@ -467,7 +467,8 @@ document.getElementById('reset').addEventListener('click', () => {
 let shadersEnabled = {
     plasma: true,
     qubit: true,
-    orbital: true
+    orbital: true,
+    entanglement: false
 };
 
 document.getElementById('toggle-plasma').addEventListener('change', (e) => {
@@ -480,6 +481,11 @@ document.getElementById('toggle-plasma').addEventListener('change', (e) => {
 document.getElementById('toggle-qubit').addEventListener('change', (e) => {
     shadersEnabled.qubit = e.target.checked;
     qubitMeshes.forEach(mesh => mesh.visible = e.target.checked);
+});
+
+
+document.getElementById('toggle-entanglement').addEventListener('change', (e) => {
+    shadersEnabled.entanglement = e.target.checked;
 });
 
 document.getElementById('toggle-orbital').addEventListener('change', (e) => {
@@ -595,7 +601,7 @@ function animate() {
         // Calculate Entanglement Resonance
         // If entangled, vibrate!
         let entanglementStrength = 0.0;
-        if (qubit.coherent && qubit.entangledWith.length > 0) {
+        if (shadersEnabled.entanglement && qubit.coherent && qubit.entangledWith.length > 0) {
             entanglementStrength = 1.0;
         }
 
