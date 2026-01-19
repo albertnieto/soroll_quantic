@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { Qubit } from './Qubit.js';
-import { plasmaVertexShader, plasmaFragmentShader, qubitVertexShader, qubitFragmentShader, orbitalVertexShader, orbitalFragmentShader } from './shaders.js';
+import { plasmaVertexShader, plasmaFragmentShader, qubitVertexShader, qubitFragmentShader } from './shaders.js';
+import { particleVertexShader, particleFragmentShader } from './advanced_shaders.js';
 import { QuantumCircuit } from './quantum_circuit.js';
 import { QuantumSound } from './quantum_sound.js';
 import { MicManager } from './mic_manager.js';
@@ -24,7 +25,7 @@ controls.enableDamping = true;
 let qubitSpacing = 8.5;
 const qubits = [];
 const qubitMeshes = [];
-const orbitalMeshes = [];
+const particleSystem = { mesh: null, uniforms: null };
 const quantumCircuit = new QuantumCircuit();
 const quantumSound = new QuantumSound();
 const micManager = new MicManager();
@@ -55,9 +56,74 @@ function updateQubitPositions() {
     qubitMeshes.forEach((mesh, i) => {
         mesh.position.copy(positions[i]);
         qubits[i].position = positions[i];
-        orbitalMeshes[i].position.copy(positions[i]);
     });
 }
+
+function createParticleSystem() {
+    // Volumetric particle cloud
+    const particleCount = 50000;
+    const geometry = new THREE.BufferGeometry();
+    const positions = new Float32Array(particleCount * 3);
+    const randoms = new Float32Array(particleCount * 3);
+    const sizes = new Float32Array(particleCount);
+
+    // Initialize 16 complex amplitudes (32 floats)
+    // Start with |0000> -> index 0 = 1.0, others 0
+    const initialState = new Float32Array(32);
+    initialState[0] = 1.0;
+
+    const qubitPosArray = [
+        new THREE.Vector3(-12.75, 0, 0),
+        new THREE.Vector3(-4.25, 0, 0),
+        new THREE.Vector3(4.25, 0, 0),
+        new THREE.Vector3(12.75, 0, 0)
+    ];
+
+    for (let i = 0; i < particleCount; i++) {
+        // Distribute particles globablly (scene-wide)
+        // Wandering around the whole scene
+        const r = 40.0 * Math.pow(Math.random(), 0.5); // Wider radius (40)
+        const theta = Math.random() * 2.0 * Math.PI;
+        const phi = Math.acos(2.0 * Math.random() - 1.0);
+
+        positions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+        positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta) * 0.5;
+        positions[i * 3 + 2] = r * Math.cos(phi);
+
+        randoms[i * 3] = Math.random();
+        randoms[i * 3 + 1] = Math.random();
+        randoms[i * 3 + 2] = Math.random();
+
+        sizes[i] = Math.random();
+    }
+
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute('aRandom', new THREE.BufferAttribute(randoms, 3));
+    geometry.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1));
+
+    const uniforms = {
+        uTime: { value: 0 },
+        uStateVector: { value: initialState },
+        uPositions: { value: qubitPosArray }
+    };
+
+    const material = new THREE.ShaderMaterial({
+        vertexShader: particleVertexShader,
+        fragmentShader: particleFragmentShader,
+        uniforms: uniforms,
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending
+    });
+
+    const points = new THREE.Points(geometry, material);
+    scene.add(points);
+
+    particleSystem.mesh = points;
+    particleSystem.uniforms = uniforms;
+}
+
+createParticleSystem();
 
 function createQubitSphere(position, index) {
     const geometry = new THREE.SphereGeometry(2, 64, 64);
@@ -69,7 +135,8 @@ function createQubitSphere(position, index) {
             uColor: { value: new THREE.Color(0xffffff) },
             uCoherence: { value: 1.0 },
             uPlasmaTexture: { value: plasmaTarget.texture },
-            uPlasmaEnabled: { value: 1.0 }
+            uPlasmaEnabled: { value: 1.0 },
+            uEntanglement: { value: 0.0 }
         },
         transparent: true,
         blending: THREE.AdditiveBlending,
@@ -83,32 +150,6 @@ function createQubitSphere(position, index) {
     return mesh;
 }
 
-function createOrbitalSphere(position, index) {
-    const geometry = new THREE.CircleGeometry(3.5, 64);
-    const material = new THREE.ShaderMaterial({
-        vertexShader: orbitalVertexShader,
-        fragmentShader: orbitalFragmentShader,
-        uniforms: {
-            uTime: { value: 0 },
-            uCoherence: { value: 0.0 },
-            resolution: { value: new THREE.Vector2(512, 512) },
-            uEntangledColors: { value: [new THREE.Color(1, 1, 1), new THREE.Color(1, 1, 1), new THREE.Color(1, 1, 1)] },
-            uEntangled: { value: [0, 0, 0] },
-            uBlobPos: { value: [new THREE.Vector2(0.5, 0.5), new THREE.Vector2(0.5, 0.5), new THREE.Vector2(0.5, 0.5)] },
-            uRandomSeed: { value: Math.random() * 10.0 }
-        },
-        transparent: true,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
-        side: THREE.DoubleSide
-    });
-
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.copy(position);
-    scene.add(mesh);
-
-    return mesh;
-}
 
 const initialPositions = [
     new THREE.Vector3(-qubitSpacing * 1.5, 0, 0),
@@ -126,8 +167,6 @@ initialPositions.forEach((pos, i) => {
     qubits.push(qubit);
     const mesh = createQubitSphere(pos, i);
     qubitMeshes.push(mesh);
-    const orbital = createOrbitalSphere(pos, i);
-    orbitalMeshes.push(orbital);
 });
 
 // Initialize with no entanglements in manual mode
@@ -441,8 +480,9 @@ document.getElementById('toggle-qubit').addEventListener('change', (e) => {
 });
 
 document.getElementById('toggle-orbital').addEventListener('change', (e) => {
-    shadersEnabled.orbital = e.target.checked;
-    orbitalMeshes.forEach(mesh => mesh.visible = e.target.checked);
+    if (particleSystem.mesh) {
+        particleSystem.mesh.visible = e.target.checked;
+    }
 });
 
 document.getElementById('spacing').addEventListener('input', (e) => {
@@ -508,6 +548,17 @@ function animate() {
 
     const qubitColors = [];
 
+    // Sync Entanglement State from Circuit
+    if (quantumCircuit.entangledPairs) {
+        // Reset
+        qubits.forEach(q => q.entangledWith = []);
+        // Apply
+        quantumCircuit.entangledPairs.forEach(pair => {
+            qubits[pair[0]].entangledWith.push(pair[1]);
+            qubits[pair[1]].entangledWith.push(pair[0]);
+        });
+    }
+
     qubits.forEach((qubit, i) => {
         if (!qubit.coherent) allCoherent = false;
 
@@ -537,35 +588,34 @@ function animate() {
 
         mesh.material.uniforms.uTime.value = time + i;
         mesh.material.uniforms.uCoherence.value = qubit.coherent ? 1.0 : 0.3;
-    });
 
-    orbitalMeshes.forEach((orbital, i) => {
-        orbital.material.uniforms.uTime.value = time + i * 0.5;
-
-        const entangledWith = qubits[i].entangledWith.filter(j => {
-            return qubits[j].coherent;
-        }).slice(0, 3);
-
-        const isEntangled = entangledWith.length > 0;
-        const targetCoherence = isEntangled ? 1.0 : 0.0;
-        const currentCoherence = orbital.material.uniforms.uCoherence.value;
-        orbital.material.uniforms.uCoherence.value += (targetCoherence - currentCoherence) * 0.05;
-
-        for (let j = 0; j < 3; j++) {
-            if (j < entangledWith.length) {
-                const targetIdx = entangledWith[j];
-                orbital.material.uniforms.uEntangledColors.value[j].copy(qubitColors[targetIdx]);
-                orbital.material.uniforms.uEntangled.value[j] = 1.0;
-
-                const t = time * 0.3 + j * 2.0;
-                const x = 0.5 + Math.sin(t) * 0.3;
-                const y = 0.5 + Math.cos(t * 1.3) * 0.3;
-                orbital.material.uniforms.uBlobPos.value[j].set(x, y);
-            } else {
-                orbital.material.uniforms.uEntangled.value[j] = 0.0;
-            }
+        // Calculate Entanglement Resonance
+        // If entangled, vibrate!
+        let entanglementStrength = 0.0;
+        if (qubit.coherent && qubit.entangledWith.length > 0) {
+            entanglementStrength = 1.0;
         }
+
+        // Smooth transition
+        const currentEnt = mesh.material.uniforms.uEntanglement.value;
+        mesh.material.uniforms.uEntanglement.value += (entanglementStrength - currentEnt) * 0.1;
     });
+
+    // Update Particle Shader State
+    if (particleSystem.uniforms) {
+        particleSystem.uniforms.uTime.value = time;
+        // Copy the current full quantum state vector (32 floats)
+        if (quantumCircuit.quantumState) {
+            particleSystem.uniforms.uStateVector.value.set(quantumCircuit.quantumState.amplitudes);
+        }
+
+        // Update qubit positions in shader (if they moved)
+        qubits.forEach((q, idx) => {
+            if (q.position) {
+                particleSystem.uniforms.uPositions.value[idx].copy(q.position);
+            }
+        });
+    }
 
     if (time % 1 < 0.016) {
         updateQuantumStateDisplay();

@@ -1,9 +1,13 @@
+import { QuantumState } from './QuantumState.js';
+
 export class QuantumCircuit {
     constructor() {
         this.gates = [];
         this.currentGate = 0;
         this.stateVector = null;
         this.currentCircuit = 'bell_state';
+        this.quantumState = new QuantumState();
+        this.entangledPairs = [];
     }
 
     async loadCircuit(circuitName = 'bell_state') {
@@ -11,36 +15,41 @@ export class QuantumCircuit {
         try {
             const response = await fetch(`/api/circuit?circuit=${circuitName}`);
             const data = await response.json();
-            this.gates = [{"type": "INIT", "wires": [0, 1, 2, 3], "params": []}, ...data.gates];
-            this.stateVector = data.state_vector;
+            this.gates = [{ "type": "INIT", "wires": [0, 1, 2, 3], "params": [] }, ...data.gates];
+
+            // Note: We don't use the backend state vector for visualization anymore
+            // We simulate it client-side for step-by-step accuracy
+            this.quantumState.reset();
+            this.stateVector = this.quantumState.amplitudes;
+
             return data;
         } catch (error) {
             console.warn('Using fallback circuit (Python server not running)');
             if (circuitName === 'random_rotation') {
                 this.gates = [
-                    {"type": "INIT", "wires": [0, 1, 2, 3], "params": []},
-                    {"type": "H", "wires": [0], "params": []},
-                    {"type": "H", "wires": [1], "params": []},
-                    {"type": "H", "wires": [2], "params": []},
-                    {"type": "H", "wires": [3], "params": []},
-                    {"type": "RX", "wires": [0], "params": [0.5]},
-                    {"type": "RY", "wires": [1], "params": [0.7]},
-                    {"type": "RZ", "wires": [2], "params": [0.3]},
-                    {"type": "RX", "wires": [3], "params": [0.9]},
-                    {"type": "CNOT", "wires": [0, 1], "params": []},
-                    {"type": "CNOT", "wires": [1, 2], "params": []},
-                    {"type": "CNOT", "wires": [2, 3], "params": []}
+                    { "type": "INIT", "wires": [0, 1, 2, 3], "params": [] },
+                    { "type": "H", "wires": [0], "params": [] },
+                    { "type": "H", "wires": [1], "params": [] },
+                    { "type": "H", "wires": [2], "params": [] },
+                    { "type": "H", "wires": [3], "params": [] },
+                    { "type": "RX", "wires": [0], "params": [0.5] },
+                    { "type": "RY", "wires": [1], "params": [0.7] },
+                    { "type": "RZ", "wires": [2], "params": [0.3] },
+                    { "type": "RX", "wires": [3], "params": [0.9] },
+                    { "type": "CNOT", "wires": [0, 1], "params": [] },
+                    { "type": "CNOT", "wires": [1, 2], "params": [] },
+                    { "type": "CNOT", "wires": [2, 3], "params": [] }
                 ];
                 return { gates: this.gates, num_qubits: 4 };
             }
             this.gates = [
-                {"type": "INIT", "wires": [0, 1, 2, 3], "params": []},
-                {"type": "H", "wires": [0], "params": []},
-                {"type": "CNOT", "wires": [0, 1], "params": []},
-                {"type": "H", "wires": [2], "params": []},
-                {"type": "CNOT", "wires": [2, 3], "params": []},
-                {"type": "RY", "wires": [0], "params": [0.5]},
-                {"type": "RY", "wires": [2], "params": [0.5]}
+                { "type": "INIT", "wires": [0, 1, 2, 3], "params": [] },
+                { "type": "H", "wires": [0], "params": [] },
+                { "type": "CNOT", "wires": [0, 1], "params": [] },
+                { "type": "H", "wires": [2], "params": [] },
+                { "type": "CNOT", "wires": [2, 3], "params": [] },
+                { "type": "RY", "wires": [0], "params": [0.5] },
+                { "type": "RY", "wires": [2], "params": [0.5] }
             ];
             return { gates: this.gates, num_qubits: 4 };
         }
@@ -49,13 +58,27 @@ export class QuantumCircuit {
     nextGate() {
         if (this.currentGate < this.gates.length) {
             this.currentGate++;
-            return this.gates[this.currentGate - 1];
+            const gate = this.gates[this.currentGate - 1];
+            this.quantumState.applyGate(gate);
+
+            // Basic Entanglement Tracking
+            if (gate.type === 'CNOT') {
+                // Heuristic: CNOT creates entanglement if control is in superposition
+                // For viz purposes, we'll just track that they interacted
+                this.entangledPairs.push([gate.wires[0], gate.wires[1]]);
+            }
+            if (gate.type === 'INIT') {
+                this.entangledPairs = [];
+            }
+
+            return gate;
         }
         return null;
     }
 
     reset() {
         this.currentGate = 0;
+        this.quantumState.reset();
     }
 
     getCurrentGate() {
