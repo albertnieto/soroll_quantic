@@ -40,7 +40,15 @@ export const particleVertexShader = `
             
             if(mag < 0.01) continue;
             
-            // State center
+            // Special handling for Ground State |0000> to avoid Center Hotspot
+            if (n == 0) {
+                 // Ground state has NO spatial center. It acts as global ambient energy.
+                 // We add to totalWeight uniformly so particles are visible but not clustered/bright at origin.
+                 totalWeight += mag * 0.2; 
+                 continue;
+            }
+            
+            // State center calculation for excited states
             vec3 stateCenter = vec3(0.0);
             int count = 0;
             for(int q=0; q<4; q++) {
@@ -53,7 +61,7 @@ export const particleVertexShader = `
             
             // Weighted attraction
             float d = distance(pos, stateCenter);
-            float attraction = mag * exp(-d * 0.2); // Long range
+            float attraction = mag * exp(-d * 0.2); 
             
             targetPos += stateCenter * attraction;
             totalWeight += attraction;
