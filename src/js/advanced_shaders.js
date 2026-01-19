@@ -1,4 +1,6 @@
-export const particleVertexShader = `
+// OLD ENTAGLEMENT SHADER (COMMENTED OUT / RENAMED FOR REFERENCE)
+// -----------------------------------------------------------------
+const old_particleVertexShader = `
     uniform float uTime;
     uniform float uStateVector[32]; // 16 complex amplitudes
     uniform vec3 uPositions[4]; // Qubit positions
@@ -97,7 +99,7 @@ export const particleVertexShader = `
     }
 `;
 
-export const particleFragmentShader = `
+const old_particleFragmentShader = `
     varying vec3 vColor;
     varying float vAlpha;
     
@@ -110,5 +112,32 @@ export const particleFragmentShader = `
         glow = pow(glow, 2.0);
         
         gl_FragColor = vec4(vColor, vAlpha * glow);
+    }
+`;
+
+// NEW ENTANGLEMENT SHADER PLACEHOLDERS
+// -----------------------------------------------------------------
+
+export const particleVertexShader = `
+    uniform float uTime;
+    attribute vec3 aRandom;
+    varying vec3 vColor;
+    
+    void main() {
+        // Minimal pass-through for now
+        vec3 pos = position;
+        vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+        gl_Position = projectionMatrix * mvPosition;
+        gl_PointSize = 20.0 / -mvPosition.z;
+        vColor = vec3(1.0, 1.0, 1.0); // Default white
+    }
+`;
+
+export const particleFragmentShader = `
+    varying vec3 vColor;
+    void main() {
+        vec2 uv = gl_PointCoord - 0.5;
+        if (length(uv) > 0.5) discard;
+        gl_FragColor = vec4(vColor, 0.5);
     }
 `;
