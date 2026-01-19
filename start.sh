@@ -17,5 +17,5 @@ echo "📦 Installing dependencies..."
 ./.venv/bin/pip install -r requirements.txt
 
 # Start the server
-echo "🚀 Server launching at http://localhost:8000"
+echo "🚀 Server launching at http://localhost:8050"
 ./.venv/bin/python3 server.py

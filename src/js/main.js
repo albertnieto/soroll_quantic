@@ -1,8 +1,13 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+
 import { Qubit } from './Qubit.js';
 import { plasmaVertexShader, plasmaFragmentShader, qubitVertexShader, qubitFragmentShader } from './shaders.js';
 import { particleVertexShader, particleFragmentShader } from './advanced_shaders.js';
+import { blackHoleBillboardVertexShader, blackHoleBillboardFragmentShader, lensingFsQuadShader } from './black_hole_shader.js';
 import { QuantumCircuit } from './quantum_circuit.js';
 import { QuantumSound } from './quantum_sound.js';
 import { MicManager } from './mic_manager.js';
@@ -18,6 +23,15 @@ const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(window.devicePixelRatio);
 document.getElementById('canvas').appendChild(renderer.domElement);
+
+// --- Post Processing Setup ---
+const composer = new EffectComposer(renderer);
+const renderPass = new RenderPass(scene, camera);
+composer.addPass(renderPass);
+
+const lensingPass = new ShaderPass(lensingFsQuadShader);
+lensingPass.uniforms.uResolution.value.set(window.innerWidth, window.innerHeight);
+composer.addPass(lensingPass);
 
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
@@ -67,8 +81,6 @@ function createParticleSystem() {
     const randoms = new Float32Array(particleCount * 3);
     const sizes = new Float32Array(particleCount);
 
-    // Initialize 16 complex amplitudes (32 floats)
-    // Start with |0000> -> index 0 = 1.0, others 0
     const initialState = new Float32Array(32);
     initialState[0] = 1.0;
 
@@ -80,23 +92,15 @@ function createParticleSystem() {
     ];
 
     for (let i = 0; i < particleCount; i++) {
-        // Distribute particles globablly (scene-wide)
-        // Wandering around the whole scene
-        // Distribute uniformly along the qubits (X axis)
-        // Cylinder shape: X from -16 to +16, Radius 25
-
         positions[i * 3] = (Math.random() - 0.5) * 32.0; // X
-
         const rCyl = 25.0 * Math.sqrt(Math.random());
         const theta = Math.random() * 2.0 * Math.PI;
-
         positions[i * 3 + 1] = rCyl * Math.cos(theta); // Y
         positions[i * 3 + 2] = rCyl * Math.sin(theta); // Z
 
         randoms[i * 3] = Math.random();
         randoms[i * 3 + 1] = Math.random();
         randoms[i * 3 + 2] = Math.random();
-
         sizes[i] = Math.random();
     }
 
@@ -148,9 +152,40 @@ function createQubitSphere(position, index) {
 
     const mesh = new THREE.Mesh(geometry, material);
     mesh.position.copy(position);
-    scene.add(mesh);
 
-    return mesh;
+    const billboardGeometry = new THREE.PlaneGeometry(12, 12);
+    const billboardMaterial = new THREE.ShaderMaterial({
+        vertexShader: blackHoleBillboardVertexShader,
+        fragmentShader: blackHoleBillboardFragmentShader,
+        uniforms: {
+            uTime: { value: 0 },
+            uBlackHoleStrength: { value: 0.0 },
+            uAccretionEnabled: { value: 1.0 },
+            uLensingEnabled: { value: 0.0 }, // Disabled on Billboard (moved to PP)
+            uEinsteinEnabled: { value: 1.0 },
+            uBloomEnabled: { value: 1.0 },
+            uCameraPos: { value: new THREE.Vector3() }
+        },
+        transparent: true,
+        blending: THREE.NormalBlending,
+        depthWrite: false
+    });
+
+    const billboardMesh = new THREE.Mesh(billboardGeometry, billboardMaterial);
+    billboardMesh.renderOrder = 999;
+
+    mesh.add(billboardMesh);
+    mesh.userData.billboardMesh = billboardMesh;
+
+    mesh.layers.set(1); // Layer 1: Foreground (Qubits)
+    // Ensure children (billboard) also inherit? Three.js usually requires explicit set for children if added later.
+    // But mesh.add() usually propagates if set before? No, let's be explicit.
+    mesh.traverse((child) => {
+        child.layers.set(1);
+    });
+
+    scene.add(mesh);
+    qubitMeshes.push(mesh);
 }
 
 
@@ -168,12 +203,8 @@ initialPositions.forEach((pos, i) => {
     qubit.phase = 0;
     qubit.coherent = true;
     qubits.push(qubit);
-    const mesh = createQubitSphere(pos, i);
-    qubitMeshes.push(mesh);
+    createQubitSphere(pos, i);
 });
-
-// Initialize with no entanglements in manual mode
-// Entanglements will be set by user or by circuits
 
 let autoExecute = false;
 let autoExecuteInterval = null;
@@ -219,7 +250,6 @@ scene.add(new THREE.AmbientLight(0x111111));
 const micThresholds = [0, 0, 0, 0];
 const THRESHOLD_LIMIT = 0.7;
 
-// Manual qubit controls
 const manualQubitsDiv = document.getElementById('manual-qubits');
 for (let i = 0; i < 4; i++) {
     const div = document.createElement('div');
@@ -277,7 +307,6 @@ for (let i = 0; i < 4; i++) {
 }
 
 const micControlsDiv = document.getElementById('mic-controls');
-
 for (let i = 0; i < 4; i++) {
     const div = document.createElement('div');
     div.className = 'mic-control';
@@ -379,7 +408,6 @@ function executeNextGate() {
                 qubits[target].alpha = qubits[target].beta;
                 qubits[target].beta = temp;
             }
-            // CNOT creates entanglement
             if (!qubits[control].entangledWith.includes(target)) {
                 qubits[control].entangledWith.push(target);
             }
@@ -468,7 +496,11 @@ let shadersEnabled = {
     plasma: true,
     qubit: true,
     orbital: true,
-    entanglement: false
+    entanglement: false,
+    accretion: true,
+    lensing: true,
+    einstein: true,
+    bloom: true
 };
 
 document.getElementById('toggle-plasma').addEventListener('change', (e) => {
@@ -483,6 +515,11 @@ document.getElementById('toggle-qubit').addEventListener('change', (e) => {
     qubitMeshes.forEach(mesh => mesh.visible = e.target.checked);
 });
 
+['accretion', 'lensing', 'einstein', 'bloom'].forEach(key => {
+    document.getElementById(`toggle-${key}`).addEventListener('change', (e) => {
+        shadersEnabled[key] = e.target.checked;
+    });
+});
 
 document.getElementById('toggle-entanglement').addEventListener('change', (e) => {
     shadersEnabled.entanglement = e.target.checked;
@@ -557,16 +594,16 @@ function animate() {
 
     const qubitColors = [];
 
-    // Sync Entanglement State from Circuit
     if (quantumCircuit.entangledPairs) {
-        // Reset
         qubits.forEach(q => q.entangledWith = []);
-        // Apply
         quantumCircuit.entangledPairs.forEach(pair => {
             qubits[pair[0]].entangledWith.push(pair[1]);
             qubits[pair[1]].entangledWith.push(pair[0]);
         });
     }
+
+    const bhCenters = [];
+    const bhStrengths = [];
 
     qubits.forEach((qubit, i) => {
         if (!qubit.coherent) allCoherent = false;
@@ -579,13 +616,9 @@ function animate() {
         if (!qubit.coherent) {
             targetColor = prob1 > 0.5 ? new THREE.Color(1, 1, 1) : new THREE.Color(0.15, 0.15, 0.15);
         } else {
-            // Brightness based on |1⟩ probability: 0.15 (dark) to 1.0 (white)
             const brightness = 0.15 + prob1 * 0.85;
-
-            // Saturation decreases near pure states for smooth transition
-            const superposition = 4 * prob0 * prob1; // Max 1.0 at 50/50, 0.0 at pure states
-            const saturation = superposition * 0.8; // 0 to 0.8
-
+            const superposition = 4 * prob0 * prob1;
+            const saturation = superposition * 0.8;
             const hue = qubit.phase / (Math.PI * 2);
             targetColor = new THREE.Color().setHSL(hue, saturation, brightness * 0.5);
         }
@@ -598,27 +631,66 @@ function animate() {
         mesh.material.uniforms.uTime.value = time + i;
         mesh.material.uniforms.uCoherence.value = qubit.coherent ? 1.0 : 0.3;
 
-        // Calculate Entanglement Resonance
-        // If entangled, vibrate!
+        // Update Billboard
+        const bb = mesh.userData.billboardMesh;
+        if (bb) {
+            bb.lookAt(camera.position);
+            bb.material.uniforms.uTime.value = time;
+            bb.material.uniforms.uCameraPos.value.copy(camera.position);
+
+            let targetBH = 0.0;
+            if (qubit.coherent && qubit.entangledWith.length > 0) {
+                targetBH = 1.0;
+            }
+            const currentBH = bb.material.uniforms.uBlackHoleStrength.value;
+            const nextBH = currentBH + (targetBH - currentBH) * 0.05;
+            bb.material.uniforms.uBlackHoleStrength.value = nextBH;
+
+            bb.material.uniforms.uAccretionEnabled.value = shadersEnabled.accretion ? 1.0 : 0.0;
+            bb.material.uniforms.uLensingEnabled.value = 0.0; // Handled by PP
+            bb.material.uniforms.uEinsteinEnabled.value = shadersEnabled.einstein ? 1.0 : 0.0;
+            bb.material.uniforms.uBloomEnabled.value = shadersEnabled.bloom ? 1.0 : 0.0;
+
+            if (nextBH > 0.01) {
+                // Project to screen space
+                const pos = mesh.position.clone();
+                pos.project(camera);
+                const u = (pos.x * 0.5) + 0.5;
+                const v = (pos.y * 0.5) + 0.5;
+                bhCenters.push(new THREE.Vector2(u, v));
+                bhStrengths.push(nextBH);
+            } else {
+                bhCenters.push(new THREE.Vector2(0.5, 0.5));
+                bhStrengths.push(0.0);
+            }
+        }
+
         let entanglementStrength = 0.0;
         if (shadersEnabled.entanglement && qubit.coherent && qubit.entangledWith.length > 0) {
             entanglementStrength = 1.0;
         }
 
-        // Smooth transition
         const currentEnt = mesh.material.uniforms.uEntanglement.value;
         mesh.material.uniforms.uEntanglement.value += (entanglementStrength - currentEnt) * 0.1;
     });
 
-    // Update Particle Shader State
+    // Update Post-Processing Lensing
+    for (let i = 0; i < 4; i++) {
+        if (i < bhCenters.length) {
+            lensingPass.uniforms.uBHCenters.value[i] = bhCenters[i];
+            lensingPass.uniforms.uBHStrengths.value[i] = bhStrengths[i];
+        } else {
+            lensingPass.uniforms.uBHStrengths.value[i] = 0.0;
+        }
+    }
+    lensingPass.uniforms.uLensingEnabled.value = shadersEnabled.lensing ? 1.0 : 0.0;
+
+
     if (particleSystem.uniforms) {
         particleSystem.uniforms.uTime.value = time;
-        // Copy the current full quantum state vector (32 floats)
         if (quantumCircuit.quantumState) {
             particleSystem.uniforms.uStateVector.value.set(quantumCircuit.quantumState.amplitudes);
         }
-
-        // Update qubit positions in shader (if they moved)
         qubits.forEach((q, idx) => {
             if (q.position) {
                 particleSystem.uniforms.uPositions.value[idx].copy(q.position);
@@ -636,7 +708,6 @@ function animate() {
             const energy = micManager.getEnergy(i);
             micThresholds[i] = energy;
 
-            // Update UI indicators
             const valueEl = document.getElementById(`value${i}`);
             const indicatorEl = document.getElementById(`indicator${i}`);
             const sliderEl = document.getElementById(`mic${i}`);
@@ -657,7 +728,22 @@ function animate() {
     quantumSound.update(qubits);
 
     controls.update();
+
+    // --- Layered Rendering for Correct Lensing ---
+    // Pass 1: Background & Particles (Layer 0) -> Lensed by Composer
+    camera.layers.set(0);
+    composer.render();
+
+    // Pass 2: Qubits & Disc (Layer 1) -> Rendered ON TOP (No Lensing)
+    // This prevents the Qubit from being "reflected" in the distortions
+    renderer.autoClear = false;
+    renderer.clearDepth(); // Clear depth buffer so Qubits sit on top
+    camera.layers.set(1);
     renderer.render(scene, camera);
+    renderer.autoClear = true;
+
+    // Reset camera layers for next frame / controls
+    camera.layers.enableAll();
 }
 
 animate();
@@ -666,4 +752,6 @@ window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
+    composer.setSize(window.innerWidth, window.innerHeight);
+    lensingPass.uniforms.uResolution.value.set(window.innerWidth, window.innerHeight);
 });

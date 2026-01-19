@@ -1,12 +1,18 @@
-* { margin: 0; padding: 0; box-sizing: border-box; }
-
-body { 
-    overflow: hidden; 
-    font-family: 'Courier New', monospace; 
-    background: #000; 
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
 }
 
-#canvas { display: block; }
+body {
+    overflow: hidden;
+    font-family: 'Courier New', monospace;
+    background: #000;
+}
+
+#canvas {
+    display: block;
+}
 
 #controls {
     position: absolute;
@@ -173,7 +179,7 @@ button:hover {
 
 #quantum-state {
     position: absolute;
-    top: 150px;
+    top: 250px;
     left: 20px;
     background: rgba(0, 0, 0, 0.8);
     padding: 10px;
