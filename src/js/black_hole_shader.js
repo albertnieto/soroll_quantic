@@ -259,8 +259,19 @@ export const lensingFsQuadShader = {
                     if (r > 0.085 && r < 0.11) {
                        // Reduced strength from 0.01 to 0.003 to fix "too augmented" look
                        float strength = uBHStrengths[i] * 0.003; 
-                       // Standard simple lens
-                       displacement -= normalize(vecToBH) * (strength / (r + 0.01));
+                       
+                       // 1. Radial Distortion (Lens)
+                       vec2 radialDir = normalize(vecToBH);
+                       displacement -= radialDir * (strength / (r + 0.01));
+                       
+                       // 2. Swirl/Twist Distortion (Frame Dragging Mimic)
+                       // Calculate tangential vector (perpendicular to radial)
+                       vec2 tangentDir = vec2(-radialDir.y, radialDir.x);
+                       
+                       // Swirl factor: stronger closer to the hole
+                       // This mimics light wrapping around the photon sphere
+                       float swirl = strength * 2.0; 
+                       displacement += tangentDir * (swirl / (r + 0.01));
                     }
                 }
             }

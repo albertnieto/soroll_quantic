@@ -143,6 +143,7 @@ function createQubitSphere(position, index) {
             uCoherence: { value: 1.0 },
             uPlasmaTexture: { value: plasmaTarget.texture },
             uPlasmaEnabled: { value: 1.0 },
+            uUse3DPlasma: { value: 1.0 }, // Default to Original 2D Mode
             uEntanglement: { value: 0.0 }
         },
         transparent: true,
@@ -520,6 +521,13 @@ document.getElementById('toggle-qubit').addEventListener('change', (e) => {
 ['accretion', 'lensing', 'einstein', 'bloom'].forEach(key => {
     document.getElementById(`toggle-${key}`).addEventListener('change', (e) => {
         shadersEnabled[key] = e.target.checked;
+    });
+});
+
+document.getElementById('toggle-seamless').addEventListener('change', (e) => {
+    shadersEnabled.seamless = e.target.checked;
+    qubitMeshes.forEach(mesh => {
+        mesh.material.uniforms.uUse3DPlasma.value = e.target.checked ? 1.0 : 0.0;
     });
 });
 
