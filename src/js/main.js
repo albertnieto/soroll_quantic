@@ -253,6 +253,7 @@ scene.add(new THREE.AmbientLight(0x111111));
 
 const micThresholds = [0, 0, 0, 0];
 const THRESHOLD_LIMIT = 0.7;
+const RIPPLE_THRESHOLD = 0.15;
 
 const manualQubitsDiv = document.getElementById('manual-qubits');
 for (let i = 0; i < 4; i++) {
@@ -702,13 +703,17 @@ function animate() {
             }
         }
 
-        let entanglementStrength = 0.0;
-        if (shadersEnabled.entanglement && qubit.coherent && qubit.entangledWith.length > 0) {
-            entanglementStrength = 1.0;
+        let rippleIntensity = 0.0;
+        if (shadersEnabled.entanglement) {
+            const energy = micThresholds[i];
+            if (energy > RIPPLE_THRESHOLD) {
+                // Higher mapping to make it more visible: clamp to 0-1 and maybe boost
+                rippleIntensity = Math.min((energy - RIPPLE_THRESHOLD) / (THRESHOLD_LIMIT - RIPPLE_THRESHOLD), 1.0);
+            }
         }
 
-        const currentEnt = mesh.material.uniforms.uEntanglement.value;
-        mesh.material.uniforms.uEntanglement.value += (entanglementStrength - currentEnt) * 0.1;
+        const currentRipple = mesh.material.uniforms.uEntanglement.value;
+        mesh.material.uniforms.uEntanglement.value += (rippleIntensity - currentRipple) * 0.15; // Slightly faster transition
     });
 
     // Update Post-Processing Lensing

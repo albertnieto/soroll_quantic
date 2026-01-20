@@ -234,7 +234,7 @@ export const qubitVertexShader = `
         // Entanglement Resonance: Vibrate vertices
         if (uEntanglement > 0.01) {
             float noiseVal = cnoise(pos * 2.0 + uTime * 5.0);
-            float displacement = noiseVal * uEntanglement * 0.3; // Amplitude
+            float displacement = noiseVal * uEntanglement * 0.6; // Increased from 0.3
             pos += normal * displacement;
         }
         
