@@ -93,7 +93,7 @@ function createParticleSystem() {
     ];
 
     for (let i = 0; i < particleCount; i++) {
-        positions[i * 3] = (Math.random() - 0.5) * 32.0; // X
+        positions[i * 3] = (Math.random() - 0.5) * 80.0; // X (was 32.0)
         const rCyl = 25.0 * Math.sqrt(Math.random());
         const theta = Math.random() * 2.0 * Math.PI;
         positions[i * 3 + 1] = rCyl * Math.cos(theta); // Y
@@ -501,9 +501,9 @@ let shadersEnabled = {
     qubit: true,
     orbital: true,
     entanglement: false,
-    accretion: true,
+    accretion: false, // Default false
     lensing: true,
-    einstein: true,
+    einstein: false, // Default false
     bloom: true
 };
 
@@ -582,6 +582,14 @@ document.getElementById('toggle-ui').addEventListener('click', () => {
     uiVisible = !uiVisible;
     document.body.classList.toggle('ui-hidden', !uiVisible);
     document.getElementById('toggle-ui').textContent = uiVisible ? 'Hide UI' : 'Show UI';
+});
+
+// Panel Toggle Logic
+document.querySelectorAll('.panel-header').forEach(header => {
+    header.addEventListener('click', () => {
+        const panel = header.closest('.ui-panel');
+        panel.classList.toggle('collapsed');
+    });
 });
 
 let lightMode = false;

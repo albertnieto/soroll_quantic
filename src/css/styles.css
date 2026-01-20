@@ -14,18 +14,139 @@ body {
     display: block;
 }
 
-#controls {
+#canvas {
+    display: block;
+}
+
+/* UI Structure */
+.ui-column {
     position: absolute;
-    top: calc(50vh + 40px);
+    top: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    height: calc(100vh - 40px);
+    pointer-events: none;
+    z-index: 100;
+}
+
+.ui-column.left {
+    left: 20px;
+}
+
+.ui-column.right {
     right: 20px;
-    background: rgba(0, 0, 0, 0.8);
-    padding: 15px;
+}
+
+.ui-panel {
+    background: rgba(0, 0, 0, 0.85);
+    padding: 12px;
     border-radius: 10px;
     border: 1px solid #00ffff;
     color: #00ffff;
-    min-width: 250px;
-    max-height: 80vh;
+    width: 280px;
+    pointer-events: auto;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 4px 15px rgba(0, 255, 255, 0.1);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.ui-panel.collapsed {
+    max-height: 40px;
+    /* Adjust to header height */
+    overflow: hidden;
+}
+
+.panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    border-bottom: 1px solid #004444;
+    padding-bottom: 8px;
+    margin-bottom: 10px;
+    user-select: none;
+}
+
+.ui-panel.collapsed .panel-header {
+    margin-bottom: 0;
+    border-bottom: none;
+}
+
+.panel-header h2 {
+    font-size: 13px;
+    margin: 0;
+    color: #00ffff;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.toggle-icon {
+    font-size: 10px;
+    transition: transform 0.3s;
+    color: #00ffff;
+}
+
+.ui-panel.collapsed .toggle-icon {
+    transform: rotate(-90deg);
+}
+
+.panel-content {
     overflow-y: auto;
+    transition: opacity 0.3s, max-height 0.3s;
+    max-height: 80vh;
+    /* Limit content height */
+}
+
+.ui-panel.collapsed .panel-content {
+    opacity: 0;
+    pointer-events: none;
+    max-height: 0;
+    margin: 0;
+}
+
+/* Specific Panel Tweaks */
+#shader-controls,
+#spacing-controls {
+    width: 100%;
+}
+
+#quantum-state,
+#sound-controls {
+    width: 100%;
+}
+
+#circuit-panel,
+#controls {
+    width: 100%;
+}
+
+/* Original Scrollbars */
+.panel-content::-webkit-scrollbar,
+#info::-webkit-scrollbar {
+    width: 4px;
+}
+
+.panel-content::-webkit-scrollbar-thumb,
+#info::-webkit-scrollbar-thumb {
+    background: #004444;
+    border-radius: 2px;
+}
+
+#controls,
+#shader-controls,
+#spacing-controls,
+#quantum-state,
+#sound-controls,
+#circuit-panel {
+    /* Position handled by columns */
+    position: relative;
+    top: auto;
+    left: auto;
+    right: auto;
+    min-width: unset;
+    max-width: unset;
 }
 
 .mic-control {
@@ -73,7 +194,9 @@ input[type="range"] {
     padding: 15px;
     border-radius: 5px;
     border: 1px solid #00ffff;
-    transition: opacity 0.3s;
+    transition: opacity 0.3s, transform 0.3s;
+    max-width: 300px;
+    z-index: 100;
 }
 
 #view-controls {
@@ -119,15 +242,11 @@ body.light-mode #background-overlay {
     opacity: 0;
 }
 
-body.ui-hidden #shader-controls,
-body.ui-hidden #spacing-controls,
-body.ui-hidden #quantum-state,
-body.ui-hidden #sound-controls,
-body.ui-hidden #circuit-panel,
-body.ui-hidden #controls,
+body.ui-hidden .ui-column,
 body.ui-hidden #info {
     opacity: 0;
     pointer-events: none;
+    transform: translateY(10px);
 }
 
 button {
@@ -146,70 +265,6 @@ button:hover {
     background: #006666;
 }
 
-#shader-controls {
-    position: absolute;
-    top: 20px;
-    left: 20px;
-    background: rgba(0, 0, 0, 0.8);
-    padding: 10px;
-    border-radius: 8px;
-    border: 1px solid #00ffff;
-    color: #00ffff;
-    width: 160px;
-}
-
-#spacing-controls {
-    position: absolute;
-    top: 20px;
-    left: 200px;
-    background: rgba(0, 0, 0, 0.8);
-    padding: 10px;
-    border-radius: 8px;
-    border: 1px solid #00ffff;
-    color: #00ffff;
-    width: 160px;
-}
-
-#spacing-controls h2 {
-    font-size: 12px;
-    margin-bottom: 8px;
-    border-bottom: 1px solid #004444;
-    padding-bottom: 4px;
-}
-
-#quantum-state {
-    position: absolute;
-    top: 250px;
-    left: 20px;
-    background: rgba(0, 0, 0, 0.8);
-    padding: 10px;
-    border-radius: 8px;
-    border: 1px solid #00ffff;
-    color: #00ffff;
-    width: 340px;
-    max-height: calc(50vh - 80px);
-    overflow-y: auto;
-}
-
-#sound-controls {
-    position: absolute;
-    top: calc(50vh + 80px);
-    left: 20px;
-    background: rgba(0, 0, 0, 0.8);
-    padding: 10px;
-    border-radius: 8px;
-    border: 1px solid #00ffff;
-    color: #00ffff;
-    width: 340px;
-}
-
-#sound-controls h2 {
-    font-size: 12px;
-    margin-bottom: 8px;
-    border-bottom: 1px solid #004444;
-    padding-bottom: 4px;
-}
-
 .sound-control {
     margin: 8px 0;
     font-size: 10px;
@@ -222,18 +277,7 @@ button:hover {
 }
 
 #circuit-panel {
-    position: absolute;
-    top: 20px;
-    right: 20px;
-    background: rgba(0, 0, 0, 0.8);
-    padding: 15px;
-    border-radius: 10px;
-    border: 1px solid #00ffff;
-    color: #00ffff;
-    min-width: 250px;
-    max-width: 250px;
-    max-height: 50vh;
-    overflow-y: auto;
+    max-height: 70vh;
 }
 
 #manual-controls {
@@ -276,14 +320,6 @@ button:hover {
     margin-right: 2px;
 }
 
-#shader-controls h2,
-#quantum-state h2 {
-    font-size: 12px;
-    margin-bottom: 8px;
-    border-bottom: 1px solid #004444;
-    padding-bottom: 4px;
-}
-
 .shader-toggle {
     margin: 8px 0;
     font-size: 11px;
@@ -321,19 +357,6 @@ button:hover {
     margin-top: 3px;
     font-size: 9px;
     color: #ffaa00;
-}
-
-#circuit-control {
-    margin-top: 10px;
-    padding-top: 10px;
-    border-top: 1px solid #004444;
-}
-
-#circuit-panel h2 {
-    font-size: 12px;
-    margin-bottom: 8px;
-    border-bottom: 1px solid #004444;
-    padding-bottom: 4px;
 }
 
 #circuit-progress {
