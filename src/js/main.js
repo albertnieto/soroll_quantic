@@ -31,6 +31,7 @@ composer.addPass(renderPass);
 
 const lensingPass = new ShaderPass(lensingFsQuadShader);
 lensingPass.uniforms.uResolution.value.set(window.innerWidth, window.innerHeight);
+lensingPass.uniforms.uBHRadii.value = [0.1, 0.1, 0.1, 0.1]; // Add this initialization
 composer.addPass(lensingPass);
 
 const controls = new OrbitControls(camera, renderer.domElement);
@@ -614,6 +615,7 @@ function animate() {
 
     const bhCenters = [];
     const bhStrengths = [];
+    const bhRadii = [];
 
     qubits.forEach((qubit, i) => {
         if (!qubit.coherent) allCoherent = false;
@@ -669,9 +671,26 @@ function animate() {
                 const v = (pos.y * 0.5) + 0.5;
                 bhCenters.push(new THREE.Vector2(u, v));
                 bhStrengths.push(nextBH);
+
+                // Calculate screen-space radius
+                // Qubit radius is 2 units in world space.
+                // We project a point on the surface to see its screen distance.
+                const surfacePoint = mesh.position.clone().add(new THREE.Vector3(2, 0, 0));
+                surfacePoint.project(camera);
+                const surfaceU = (surfacePoint.x * 0.5) + 0.5;
+                const radiusScreen = Math.abs(surfaceU - u) * (window.innerWidth / window.innerHeight); // Aspect corrected?
+                // Actually the shader corrects aspect ratio when calculating 'r', 
+                // but length(aspectCorrectedVec) where aspectCorrectedVec = vecToBH * vec2(aspect, 1.0)
+                // means 'r' is in "y-normalized" units.
+                // So radiusScreen should be in "y-normalized" units too.
+                const radiusY = Math.abs((surfacePoint.y * 0.5) + 0.5 - v); // Screen height units
+                const radiusX = Math.abs((surfacePoint.x * 0.5) + 0.5 - u) * (window.innerWidth / window.innerHeight);
+                // Use the projected X distance but scaled by aspect ratio to match shader 'r'.
+                bhRadii.push(radiusX);
             } else {
                 bhCenters.push(new THREE.Vector2(0.5, 0.5));
                 bhStrengths.push(0.0);
+                bhRadii.push(0.1);
             }
         }
 
@@ -689,6 +708,7 @@ function animate() {
         if (i < bhCenters.length) {
             lensingPass.uniforms.uBHCenters.value[i] = bhCenters[i];
             lensingPass.uniforms.uBHStrengths.value[i] = bhStrengths[i];
+            lensingPass.uniforms.uBHRadii.value[i] = bhRadii[i];
         } else {
             lensingPass.uniforms.uBHStrengths.value[i] = 0.0;
         }

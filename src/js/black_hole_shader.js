@@ -204,6 +204,7 @@ export const lensingFsQuadShader = {
     uniforms: {
         tDiffuse: { value: null },
         uBHCenters: { value: [new THREE.Vector2(0.5, 0.5), new THREE.Vector2(0.5, 0.5), new THREE.Vector2(0.5, 0.5), new THREE.Vector2(0.5, 0.5)] },
+        uBHRadii: { value: [0.1, 0.1, 0.1, 0.1] }, // New: Screen space radii
         uBHStrengths: { value: [0.0, 0.0, 0.0, 0.0] }, // 0 to 1
         uLensingEnabled: { value: 1.0 },
         uResolution: { value: new THREE.Vector2(1.0, 1.0) } // Screen aspect ratio fix
@@ -218,6 +219,7 @@ export const lensingFsQuadShader = {
     fragmentShader: `
         uniform sampler2D tDiffuse;
         uniform vec2 uBHCenters[4]; // Screen coordinates (0..1)
+        uniform float uBHRadii[4];  // New: Screen radii
         uniform float uBHStrengths[4];
         uniform float uLensingEnabled;
         uniform vec2 uResolution; // aspect ratio correction: (width/height, 1.0) or (1.0, height/width)
@@ -251,12 +253,14 @@ export const lensingFsQuadShader = {
                     // So we sample from vUv + displacement (displacement pointing AWAY from center).
                     // If we sample from further out, we are pulling the background IN.
                     
-                    // Fine-tuning: Qubit UV radius is approx 0.08. 
-                    // User requested 0.11 radius and "perfectly see the qubit".
+                    // Fine-tuning: Dynamic radius uBHRadii[i]
                     // We MUST mask the center so the Qubit itself is NOT distorted.
-                    // Only distort the "ring" between 0.085 and 0.11.
+                    // Only distort the "ring" between radius and radius * 1.35.
                     
-                    if (r > 0.085 && r < 0.11) {
+                    float rMin = uBHRadii[i];
+                    float rMax = uBHRadii[i] * 1.35;
+                    
+                    if (r > rMin && r < rMax) {
                        // Reduced strength from 0.01 to 0.003 to fix "too augmented" look
                        float strength = uBHStrengths[i] * 0.003; 
                        
