@@ -146,8 +146,10 @@ function createQubitSphere(position, index) {
             uEntanglement: { value: 0.0 }
         },
         transparent: true,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false
+        // Changed to NormalBlending so the Qubit occludes the background particles.
+        // This solves "seeing particles in front and behind".
+        blending: THREE.NormalBlending,
+        depthWrite: false // We clear depth anyway, so this is fine, but NormalBlending needs alpha channel.
     });
 
     const mesh = new THREE.Mesh(geometry, material);
