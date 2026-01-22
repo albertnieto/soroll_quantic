@@ -11,6 +11,7 @@ import { blackHoleBillboardVertexShader, blackHoleBillboardFragmentShader, lensi
 import { QuantumCircuit } from './quantum_circuit.js';
 import { QuantumSound } from './quantum_sound.js';
 import { MicManager } from './mic_manager.js';
+import { createQuantumClouds } from './quantum_clouds.js';
 
 const scene = new THREE.Scene();
 scene.fog = new THREE.FogExp2(0x000000, 0.02);
@@ -40,6 +41,7 @@ controls.enableDamping = true;
 let qubitSpacing = 8.5;
 const qubits = [];
 const qubitMeshes = [];
+const qubitCloudMeshes = []; // Stores { state0, state1 } for each qubit
 const particleSystem = { mesh: null, uniforms: null };
 const quantumCircuit = new QuantumCircuit();
 const quantumSound = new QuantumSound();
@@ -133,6 +135,9 @@ function createParticleSystem() {
 
 createParticleSystem();
 
+// Pre-generate Cloud Prototypes (once, reusing geometry is efficient)
+const cloudPrototypes = createQuantumClouds(5000);
+
 function createQubitSphere(position, index) {
     const geometry = new THREE.SphereGeometry(2, 64, 64);
     const material = new THREE.ShaderMaterial({
@@ -190,6 +195,26 @@ function createQubitSphere(position, index) {
 
     scene.add(mesh);
     qubitMeshes.push(mesh);
+
+    // --- Create Quantum Clouds for this Qubit ---
+    const cloud0 = cloudPrototypes.meshState0.clone();
+    const cloud1 = cloudPrototypes.meshState1.clone();
+
+    // Independent materials for each qubit so we can control opacity individually
+    cloud0.material = cloudPrototypes.meshState0.material.clone();
+    cloud1.material = cloudPrototypes.meshState1.material.clone();
+
+    cloud0.position.copy(position);
+    cloud1.position.copy(position);
+
+    // Initially hidden
+    cloud0.visible = false;
+    cloud1.visible = false;
+
+    scene.add(cloud0);
+    scene.add(cloud1);
+
+    qubitCloudMeshes.push({ state0: cloud0, state1: cloud1 });
 }
 
 
@@ -500,6 +525,7 @@ document.getElementById('reset').addEventListener('click', () => {
 let shadersEnabled = {
     plasma: true,
     qubit: true,
+    clouds: false, // New mode
     orbital: true,
     entanglement: false,
     accretion: false, // Default false
@@ -518,6 +544,10 @@ document.getElementById('toggle-plasma').addEventListener('change', (e) => {
 document.getElementById('toggle-qubit').addEventListener('change', (e) => {
     shadersEnabled.qubit = e.target.checked;
     qubitMeshes.forEach(mesh => mesh.visible = e.target.checked);
+});
+
+document.getElementById('toggle-clouds').addEventListener('change', (e) => {
+    shadersEnabled.clouds = e.target.checked;
 });
 
 ['accretion', 'lensing', 'einstein', 'bloom'].forEach(key => {
@@ -714,6 +744,39 @@ function animate() {
 
         const currentRipple = mesh.material.uniforms.uEntanglement.value;
         mesh.material.uniforms.uEntanglement.value += (rippleIntensity - currentRipple) * 0.15; // Slightly faster transition
+
+        // --- Update Quantum Clouds ---
+        const clouds = qubitCloudMeshes[i];
+        if (shadersEnabled.clouds) {
+            // Map Probabilities to Opacity
+            // Base opacity 0.5, modulate by prob
+            clouds.state0.material.opacity = 0.5 * prob0;
+            clouds.state1.material.opacity = 0.5 * prob1;
+
+            // Map Phase to Rotation (State 1 Dumbbell)
+            // Rotate along Z to spin the lobes? Or Y? 
+            // Dumbbell generates with lobes along Y axis (as per code in quantum_clouds.js)
+            // Let's spin it around Z axis to show phase.
+            clouds.state1.rotation.z = qubit.phase;
+            clouds.state1.rotation.y = time * 0.2; // Slowly rotate the whole thing for 3D effect? Or keep purely phase?
+            // Pure phase is better for "mapping". 
+            // Actually, a probability-weighted spin might be cool, but strict phase mapping requested:
+            // "Phase -> controls the Rotation of meshState1 (e.g., meshState1.rotation.z)"
+
+            clouds.state0.visible = true;
+            clouds.state1.visible = true;
+
+            // Hide Plasma Mesh if Clouds are enabled? 
+            // User said "alternative shader", "switch and experiment".
+            // Usually mutually exclusive makes sense for "Visualization Mode".
+            // We'll handle mutual exclusivity in the UI/Control logic, or just enforce visibility here.
+            mesh.visible = false;
+        } else {
+            clouds.state0.visible = false;
+            clouds.state1.visible = false;
+            // Restore Plasma Mesh visibility if it was globally enabled
+            mesh.visible = shadersEnabled.qubit;
+        }
     });
 
     // Update Post-Processing Lensing
