@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ripple Studio - STL Exporter</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #111;
+            color: #eee;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #ui-panel {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 300px;
+            background: rgba(0, 0, 0, 0.85);
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #444;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+
+        h1 {
+            margin-top: 0;
+            font-size: 1.2rem;
+            color: #00ffff;
+            border-bottom: 1px solid #444;
+            padding-bottom: 10px;
+        }
+
+        .control-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 0.9rem;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            cursor: pointer;
+        }
+
+        .value-display {
+            font-size: 0.8rem;
+            color: #aaa;
+            text-align: right;
+            margin-top: 2px;
+        }
+
+        button {
+            width: 100%;
+            padding: 10px;
+            background: #0066cc;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: background 0.2s;
+        }
+
+        button:hover {
+            background: #0088ff;
+        }
+
+        .info {
+            font-size: 0.8rem;
+            color: #888;
+            margin-top: 10px;
+            line-height: 1.4;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="canvas-container"></div>
+
+    <div id="ui-panel">
+        <h1>Ripple Studio</h1>
+
+        <div class="control-group">
+            <label for="time-slider">Animation Frame (Time)</label>
+            <input type="range" id="time-slider" min="0" max="100" value="0" step="0.1">
+            <div class="value-display" id="time-display">0.0</div>
+        </div>
+
+        <div class="control-group">
+            <label for="strength-slider">Ripple Level</label>
+            <input type="range" id="strength-slider" min="0" max="2" value="0.5" step="0.05">
+            <div class="value-display" id="strength-display">0.5</div>
+        </div>
+
+        <div class="control-group">
+            <label for="resolution-slider">Mesh Resolution (Segments)</label>
+            <input type="range" id="resolution-slider" min="32" max="256" value="128" step="16">
+            <div class="value-display" id="resolution-display">128</div>
+        </div>
+
+        <div class="control-group">
+            <button id="export-btn">Export STL</button>
+        </div>
+
+        <div class="info">
+            Adjust the sliders to find the perfect ripple shape. "Export STL" will save the current 3D geometry exactly
+            as seen.
+        </div>
+    </div>
+
+    <!-- Import Map for Three.js -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+    <script type="module" src="src/js/ripple_studio.js"></script>
+</body>
+
+</html>
