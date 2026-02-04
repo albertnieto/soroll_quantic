@@ -139,7 +139,22 @@
 
         <div class="control-group">
             <label for="rotation-slider">Auto-Rotation Speed</label>
-            <input type="range" id="rotation-slider" min="0" max="5" value="1.0" step="0.1">
+            <input type="range" id="rotation-slider" min="0" max="5" value="0.0" step="0.1">
+        </div>
+
+        <div class="control-group">
+            <label style="color:#00ffff; border-top:1px solid #333; padding-top:10px; margin-top:10px;">Lighting
+                Setup</label>
+        </div>
+
+        <div class="control-group">
+            <label for="ambient-slider">Ambient Light (Fill Shadows)</label>
+            <input type="range" id="ambient-slider" min="0" max="10" value="4" step="0.5">
+        </div>
+
+        <div class="control-group">
+            <label for="key-light-slider">Key Light (Main Shadows)</label>
+            <input type="range" id="key-light-slider" min="0" max="10" value="3" step="0.5">
         </div>
     </div>
 
@@ -157,6 +172,7 @@
                 <option value="box">Abstract Box</option>
                 <option value="capsule">Cyber Capsule</option>
                 <option value="cylinder">Hyper Cylinder</option>
+                <option value="ashtray">Designer Ashtray</option>
             </select>
         </div>
 

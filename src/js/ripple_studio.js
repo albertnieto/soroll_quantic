@@ -18,12 +18,17 @@ const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 
 // --- Lighting ---
-const ambientLight = new THREE.AmbientLight(0x404040, 2);
+const ambientLight = new THREE.AmbientLight(0xffffff, 4);
 scene.add(ambientLight);
 
-const directionalLight = new THREE.DirectionalLight(0xffffff, 2);
+const directionalLight = new THREE.DirectionalLight(0xffffff, 3);
 directionalLight.position.set(5, 10, 7);
 scene.add(directionalLight);
+
+// Add a secondary fill light for "Studio" look
+const fillLight = new THREE.DirectionalLight(0xffffff, 1.5);
+fillLight.position.set(-5, -5, -7);
+scene.add(fillLight);
 
 // --- State ---
 const state = {
@@ -42,8 +47,11 @@ const state = {
     materialType: 'standard',
     roughness: 0.4,
     metalness: 0.2,
-    rotationSpeed: 0.0, // Default to OFF
-    autoAnimate: true
+    rotationSpeed: 0.0,
+    autoAnimate: true,
+    // Lighting State
+    ambientIntensity: 4.0,
+    keyLightIntensity: 3.0
 };
 
 // --- Mesh Setup ---
@@ -199,32 +207,158 @@ function createCustomGeometry() {
                 baseOuter.copy(baseNormal).multiplyScalar(radius);
                 baseInner.copy(baseNormal).multiplyScalar(radius - thickness);
             } else if (state.primitive === 'torus') {
-                const tubeRadius = 0.6;
-                const mainRadius = 1.4;
+                const mainR = 1.4;
+                const tubeR = 0.6;
                 const phi = u * Math.PI * 2;
                 const theta = v * Math.PI * 2;
-
-                baseOuter.set(
-                    (mainRadius + tubeRadius * Math.cos(theta)) * Math.cos(phi),
-                    tubeRadius * Math.sin(theta),
-                    (mainRadius + tubeRadius * Math.cos(theta)) * Math.sin(phi)
-                );
-
-                // Helper normal for torus
-                const centerPoint = new THREE.Vector3(mainRadius * Math.cos(phi), 0, mainRadius * Math.sin(phi));
-                baseNormal.copy(baseOuter).sub(centerPoint).normalize();
+                const x = (mainR + tubeR * Math.cos(theta)) * Math.cos(phi);
+                const y = tubeR * Math.sin(theta);
+                const z = (mainR + tubeR * Math.cos(theta)) * Math.sin(phi);
+                baseOuter.set(x, y, z);
+                const center = new THREE.Vector3(mainR * Math.cos(phi), 0, mainR * Math.sin(phi));
+                baseNormal.copy(baseOuter).sub(center).normalize();
                 baseInner.copy(baseOuter).sub(baseNormal.clone().multiplyScalar(thickness));
             } else if (state.primitive === 'knot') {
-                // Trefoil Knot approximation
+                // Proper Tubular Trefoil Knot
                 const t = u * Math.PI * 2;
                 const p = v * Math.PI * 2;
+                const p1 = new THREE.Vector3(
+                    Math.sin(t) + 2 * Math.sin(2 * t),
+                    Math.cos(t) - 2 * Math.cos(2 * t),
+                    -Math.sin(3 * t)
+                ).multiplyScalar(0.5);
+                // Simple orientation frame
+                const p2 = new THREE.Vector3(
+                    Math.sin(t + 0.01) + 2 * Math.sin(2 * (t + 0.01)),
+                    Math.cos(t + 0.01) - 2 * Math.cos(2 * (t + 0.01)),
+                    -Math.sin(3 * (t + 0.01))
+                ).multiplyScalar(0.5);
+                const tangent = p2.clone().sub(p1).normalize();
+                const normal = new THREE.Vector3(0, 1, 0).cross(tangent).normalize();
+                const binormal = tangent.clone().cross(normal).normalize();
 
-                const kx = Math.sin(t) + 2 * Math.sin(2 * t);
-                const ky = Math.cos(t) - 2 * Math.cos(2 * t);
-                const kz = -Math.sin(3 * t);
+                const tubeR = 0.3;
+                const offsetX = Math.cos(p) * tubeR;
+                const offsetY = Math.sin(p) * tubeR;
 
-                baseOuter.set(kx * 0.6, ky * 0.6, kz * 0.6);
-                baseNormal.copy(baseOuter).normalize(); // Simple normal for knot
+                baseNormal.copy(normal).multiplyScalar(Math.cos(p)).add(binormal.clone().multiplyScalar(Math.sin(p))).normalize();
+                baseOuter.copy(p1).add(baseNormal.clone().multiplyScalar(tubeR));
+                baseInner.copy(p1).add(baseNormal.clone().multiplyScalar(tubeR - thickness));
+            } else if (state.primitive === 'box') {
+                // Spherical Cube mapping
+                const currentPhi = startAngle + u * wedgeAngle;
+                const theta = v * Math.PI;
+                const sx = Math.sin(theta) * Math.cos(currentPhi);
+                const sy = Math.cos(theta);
+                const sz = Math.sin(theta) * Math.sin(currentPhi);
+                // Clamp to box
+                const max = Math.max(Math.abs(sx), Math.abs(sy), Math.abs(sz));
+                baseNormal.set(sx, sy, sz).normalize();
+                baseOuter.set(sx / max * 1.5, sy / max * 1.5, sz / max * 1.5);
+                baseInner.copy(baseOuter).sub(baseNormal.clone().multiplyScalar(thickness));
+            } else if (state.primitive === 'cylinder') {
+                const currentPhi = startAngle + u * wedgeAngle;
+                const h = (v - 0.5) * 3.0;
+                baseNormal.set(Math.cos(currentPhi), 0, Math.sin(currentPhi));
+                baseOuter.set(Math.cos(currentPhi) * 1.2, h, Math.sin(currentPhi) * 1.2);
+                baseInner.set(Math.cos(currentPhi) * (1.2 - thickness), h, Math.sin(currentPhi) * (1.2 - thickness));
+            } else if (state.primitive === 'capsule') {
+                const currentPhi = startAngle + u * wedgeAngle;
+                const t = v * Math.PI;
+                let y = (v - 0.5) * 2;
+                let r = 1.0;
+                if (v < 0.2) { // Top Cap
+                    const vCap = v / 0.2;
+                    y = 1.0 + Math.sin(vCap * Math.PI / 2 - Math.PI / 2);
+                    r = Math.cos(vCap * Math.PI / 2 - Math.PI / 2);
+                } else if (v > 0.8) { // Bottom Cap
+                    const vCap = (v - 0.8) / 0.2;
+                    y = -1.0 - Math.sin(vCap * Math.PI / 2);
+                    r = Math.cos(vCap * Math.PI / 2);
+                }
+                baseNormal.set(Math.cos(currentPhi) * r, v < 0.2 ? 1 : (v > 0.8 ? -1 : 0), Math.sin(currentPhi) * r).normalize();
+                baseOuter.set(Math.cos(currentPhi) * r, y, Math.sin(currentPhi) * r);
+                baseInner.copy(baseOuter).sub(baseNormal.clone().multiplyScalar(thickness));
+            } else if (state.primitive === 'ashtray') {
+                const R = 1.8; // Outer Radius
+                const r = 1.35; // Bowl Radius
+                const H = 0.8; // Total Wall Height
+                const bH = 0.2; // Floor height from bottom
+                const phi = startAngle + u * wedgeAngle;
+
+                const rimHeight = H;
+
+                // Clean 4-segment mapping for the "Upper Surface"
+                if (v < 0.3) { // Outer cylinder wall
+                    const t = v / 0.3;
+                    baseOuter.set(Math.cos(phi) * R, t * H, Math.sin(phi) * R);
+                    baseNormal.set(Math.cos(phi), 0, Math.sin(phi));
+                } else if (v < 0.4) { // Top Rim
+                    const t = (v - 0.3) / 0.1;
+                    const curR = R - t * (R - r);
+                    baseOuter.set(Math.cos(phi) * curR, rimHeight, Math.sin(phi) * curR);
+                    baseNormal.set(0, 1, 0);
+                } else if (v < 0.7) { // Inner bowl wall
+                    const t = (v - 0.4) / 0.3;
+                    const curH = rimHeight - t * (H - bH);
+                    baseOuter.set(Math.cos(phi) * r, curH, Math.sin(phi) * r);
+                    baseNormal.set(-Math.cos(phi), 0, -Math.sin(phi));
+                } else { // Bowl Floor
+                    const t = (v - 0.7) / 0.3;
+                    const curR = r * (1.0 - t);
+                    baseOuter.set(Math.cos(phi) * curR, bH, Math.sin(phi) * curR);
+                    baseNormal.set(0, 1, 0);
+                }
+
+                // For a solid, 3D printable object:
+                // baseInner is the "Casing" (The bottom and underside)
+                baseInner.copy(baseOuter);
+                if (v < 0.3) {
+                    baseInner.set(Math.cos(phi) * (R - thickness), baseOuter.y, Math.sin(phi) * (R - thickness));
+                } else {
+                    baseInner.y = 0; // Flat base
+                }
+            } else if (state.primitive === 'knot') {
+                // Trefoil Knot with robust Frenet-Serret frame
+                const t = u * Math.PI * 2;
+                const pAngle = v * Math.PI * 2;
+                const getPos = (currT) => new THREE.Vector3(
+                    Math.sin(currT) + 2 * Math.sin(2 * currT),
+                    Math.cos(currT) - 2 * Math.cos(2 * currT),
+                    -Math.sin(3 * currT)
+                ).multiplyScalar(0.6);
+
+                const p1 = getPos(t);
+                const p2 = getPos(t + 0.01);
+                const tangent = p2.clone().sub(p1).normalize();
+                const normal = new THREE.Vector3(0, 1, 0).cross(tangent).normalize();
+                if (normal.length() < 0.1) normal.set(1, 0, 0).cross(tangent).normalize();
+                const binormal = tangent.clone().cross(normal).normalize();
+
+                const tubeR = 0.35;
+                const cx = Math.cos(pAngle) * tubeR;
+                const cy = Math.sin(pAngle) * tubeR;
+
+                baseNormal.copy(normal).multiplyScalar(Math.cos(pAngle)).add(binormal.clone().multiplyScalar(Math.sin(pAngle))).normalize();
+                baseOuter.copy(p1).add(baseNormal.clone().multiplyScalar(tubeR));
+                baseInner.copy(p1).add(baseNormal.clone().multiplyScalar(tubeR - thickness));
+            } else if (state.primitive === 'cone') {
+                const phi = startAngle + u * wedgeAngle;
+                const h = (1.0 - v) * 3.0; // Pointy at top (v=1)
+                const r = v * 1.5;
+                baseOuter.set(Math.cos(phi) * r, h, Math.sin(phi) * r);
+                baseNormal.set(Math.cos(phi), 0.5, Math.sin(phi)).normalize();
+                baseInner.copy(baseOuter).sub(baseNormal.clone().multiplyScalar(thickness));
+            } else if (state.primitive === 'pyramid') {
+                const h = (1.0 - v) * 3.0;
+                const r = v * 1.5;
+                const phi = startAngle + u * wedgeAngle;
+                const x = Math.cos(phi) * r;
+                const z = Math.sin(phi) * r;
+                // Square clamping
+                const max = Math.max(Math.abs(Math.cos(phi)), Math.abs(Math.sin(phi)));
+                baseOuter.set(x / max, h, z / max);
+                baseNormal.set(x, 1, z).normalize();
                 baseInner.copy(baseOuter).sub(baseNormal.clone().multiplyScalar(thickness));
             } else if (state.primitive === 'plane') {
                 baseOuter.set((u - 0.5) * 4, (v - 0.5) * 4, 0);
@@ -240,15 +374,41 @@ function createCustomGeometry() {
 
             // Apply Structural Modifiers
             if (state.modifier === 'jitter') {
-                const noise = cnoise(ix * 10, iy * 10, state.time) * 0.1 * state.strength;
-                finalOuter.addScalar(noise);
-                finalInner.addScalar(noise);
+                const noiseX = (Math.random() - 0.5) * 0.2 * state.strength;
+                const noiseY = (Math.random() - 0.5) * 0.2 * state.strength;
+                const noiseZ = (Math.random() - 0.5) * 0.2 * state.strength;
+                const noiseVec = new THREE.Vector3(noiseX, noiseY, noiseZ);
+                finalOuter.add(noiseVec);
+                finalInner.add(noiseVec);
+            } else if (state.modifier === 'voxel') {
+                const step = 0.2 / (state.strength + 0.1);
+                finalOuter.set(
+                    Math.round(finalOuter.x / step) * step,
+                    Math.round(finalOuter.y / step) * step,
+                    Math.round(finalOuter.z / step) * step
+                );
+                finalInner.set(
+                    Math.round(finalInner.x / step) * step,
+                    Math.round(finalInner.y / step) * step,
+                    Math.round(finalInner.z / step) * step
+                );
+            } else if (state.modifier === 'liquid') {
+                const wave = Math.sin(finalOuter.y * 5 + state.time * 2) * 0.2 * state.strength;
+                finalOuter.x += wave;
+                finalInner.x += wave;
+                finalOuter.z += Math.cos(finalOuter.y * 5 + state.time * 2) * 0.2 * state.strength;
+                finalInner.z += Math.cos(finalOuter.y * 5 + state.time * 2) * 0.2 * state.strength;
             } else if (state.modifier === 'magnetic') {
                 const pull = new THREE.Vector3(Math.sin(state.time), Math.cos(state.time), 0).multiplyScalar(2);
                 const dist = finalOuter.distanceTo(pull);
-                const force = (1.0 / (dist + 0.5)) * state.strength;
-                finalOuter.lerp(pull, force * 0.2);
-                finalInner.lerp(pull, force * 0.2);
+                const force = Math.max(0, (1.5 - dist) / 1.5) * state.strength;
+                finalOuter.lerp(pull, force);
+                finalInner.lerp(pull, force);
+            } else if (state.modifier === 'explode') {
+                // Face-based normal push
+                const facePush = baseNormal.clone().multiplyScalar(state.strength * 1.5);
+                finalOuter.add(facePush);
+                finalInner.add(facePush);
             }
 
             outerVerts.push(finalOuter);
@@ -318,43 +478,58 @@ function createCustomGeometry() {
     // So for splitCount=1, we return two disconnected shells (Outer facing out, Inner facing in).
     // This is valid "Hollow" geometry.
 
-    if (state.splitCount > 1) {
-        // We have exposed edges at ix=0 and ix=gridX.
-        // Side 1: ix=0 (Start Angle). Connect Outer(ix=0) to Inner(ix=0)
-        // Side 2: ix=gridX (End Angle). Connect Outer(ix=gridX) to Inner(ix=gridX)
+    // --- Side Walls / Capping (CRITICAL FOR 3D PRINTING) ---
+    // This connects the Outer shell to the Inner shell to create "Solid Walls"
 
-        // Loop vertically (iy)
+    // 1. Vertical Boundaries (Sides of Plane or Start/End of Wedge)
+    if (state.splitCount > 1 || state.primitive === 'plane') {
         for (let iy = 0; iy < gridY; iy++) {
-            // --- Side 1 (Start) ---
-            // Vertices along the "left" edge
-            // Outer: (iy, 0) and (iy+1, 0)
-            // Inner: (iy, 0)_in and (iy+1, 0)_in
+            // Left Edge (ix = 0)
+            const t_out_l = iy * (gridX + 1);
+            const b_out_l = (iy + 1) * (gridX + 1);
+            const t_in_l = t_out_l + innerOffset;
+            const b_in_l = b_out_l + innerOffset;
+            indices.push(t_out_l, b_out_l, t_in_l);
+            indices.push(b_out_l, b_in_l, t_in_l);
 
-            const top_out = iy * (gridX + 1);
-            const bot_out = (iy + 1) * (gridX + 1);
+            // Right Edge (ix = gridX)
+            const t_out_r = iy * (gridX + 1) + gridX;
+            const b_out_r = (iy + 1) * (gridX + 1) + gridX;
+            const t_in_r = t_out_r + innerOffset;
+            const b_in_r = b_out_r + innerOffset;
+            indices.push(t_out_r, t_in_r, b_out_r);
+            indices.push(b_out_r, t_in_r, b_in_r);
+        }
+    }
 
-            const top_in = top_out + innerOffset;
-            const bot_in = bot_out + innerOffset;
+    // 2. Horizontal Boundaries (Top/Bottom of Cylinder or Plane or Ashtray)
+    if (state.primitive === 'cylinder' || state.primitive === 'plane' || state.primitive === 'ashtray') {
+        for (let ix = 0; ix < gridX; ix++) {
+            // "Bottom" Edge (iy = 0 - though for ashtray this is center floor)
+            // But we actually only care about the open vertices at ix/iy limits
 
-            // Quad: top_out, bot_out, bot_in, top_in
-            // Winding: needs to point roughly "left" (negative tangent).
-            // Test: t_o, b_o, t_in is CCW?
-            indices.push(top_out, bot_out, top_in);
-            indices.push(bot_out, bot_in, top_in);
+            // For Ashtray, the center floor (v=1) and center bottom (v=0??) need capping?
+            // Actually the topology I built for ashtray is a closed loops in U (angle), 
+            // but the V ends (v=0 and v=1) are the center of the bottom and center of the bowl floor.
+            // These are singular points. Like a sphere's pole.
+            // So they don't need "capping" between shells if they converge.
 
-            // --- Side 2 (End) ---
-            // Vertices along "right" edge
-            // ix = gridX
-            const top_out_r = iy * (gridX + 1) + gridX;
-            const bot_out_r = (iy + 1) * (gridX + 1) + gridX;
+            // HOWEVER, if the primitive is ashtray, we need to CLOSE the bottom if it's not a full volume.
+            // My ashtray map creates a hollow-like bowl.
 
-            const top_in_r = top_out_r + innerOffset;
-            const bot_in_r = bot_out_r + innerOffset;
+            const l_out_t = ix;
+            const r_out_t = ix + 1;
+            const l_in_t = l_out_t + innerOffset;
+            const r_in_t = r_out_t + innerOffset;
+            indices.push(l_out_t, l_in_t, r_out_t);
+            indices.push(r_out_t, l_in_t, r_in_t);
 
-            // Quad: top_out_r, bot_out_r, bot_in_r, top_in_r
-            // Winding: opposite of Side 1
-            indices.push(top_out_r, top_in_r, bot_out_r);
-            indices.push(bot_out_r, top_in_r, bot_in_r);
+            const l_out_b = gridY * (gridX + 1) + ix;
+            const r_out_b = gridY * (gridX + 1) + ix + 1;
+            const l_in_b = l_out_b + innerOffset;
+            const r_in_b = r_out_b + innerOffset;
+            indices.push(l_out_b, r_out_b, l_in_b);
+            indices.push(r_out_b, r_in_b, l_in_b);
         }
     }
     // If splitCount == 1, we leave them unconnected.
@@ -420,6 +595,8 @@ const materialSelect = document.getElementById('material-select');
 const roughnessSlider = document.getElementById('roughness-slider');
 const metalnessSlider = document.getElementById('metalness-slider');
 const rotationSlider = document.getElementById('rotation-slider');
+const ambientSlider = document.getElementById('ambient-slider');
+const keyLightSlider = document.getElementById('key-light-slider');
 
 const primitiveSelect = document.getElementById('primitive-select');
 const modifierSelect = document.getElementById('modifier-select');
@@ -446,18 +623,31 @@ modifierSelect.addEventListener('change', (e) => {
 function applyTheme() {
     if (state.theme === 'light') {
         scene.background = new THREE.Color(0xffffff);
-        ambientLight.intensity = 3;
-        directionalLight.intensity = 3;
     } else {
         scene.background = new THREE.Color(0x111111);
-        ambientLight.intensity = 2;
-        directionalLight.intensity = 2;
     }
+    updateLights();
+}
+
+function updateLights() {
+    ambientLight.intensity = state.ambientIntensity;
+    directionalLight.intensity = state.keyLightIntensity;
+    fillLight.intensity = state.keyLightIntensity * 0.5; // Always keep fill proportional
 }
 
 themeSelect.addEventListener('change', (e) => {
     state.theme = e.target.value;
     applyTheme();
+});
+
+ambientSlider.addEventListener('input', (e) => {
+    state.ambientIntensity = parseFloat(e.target.value);
+    updateLights();
+});
+
+keyLightSlider.addEventListener('input', (e) => {
+    state.keyLightIntensity = parseFloat(e.target.value);
+    updateLights();
 });
 
 colorPicker.addEventListener('input', (e) => {
