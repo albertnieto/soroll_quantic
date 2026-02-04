@@ -27,33 +27,103 @@ scene.add(directionalLight);
 
 // --- State ---
 const state = {
+    primitive: 'sphere',
+    modifier: 'none',
+    mathMode: 'noise',
+    theme: 'light',
     time: 0,
     strength: 0.5,
-    resolution: 128,
+    resolution: 256,
     thickness: 0.2,
     splitCount: 1,
-    pieceIndex: 0
+    pieceIndex: 0,
+    // New Material/Meta State
+    color: '#00aaff',
+    materialType: 'standard',
+    roughness: 0.4,
+    metalness: 0.2,
+    rotationSpeed: 0.0, // Default to OFF
+    autoAnimate: true
 };
 
 // --- Mesh Setup ---
 let mesh; // The visible mesh
 let baseGeometryInfo = null; // Store base sphere info (uvs, etc) if needed, but we regenerate fully now.
 
-// Helper to get noise displacement
+// Helper to get displacement/offset based on math mode
+// Returns { offset: Vector3, visible: boolean }
 function getDisplacement(x, y, z, time, strength) {
-    // Match Shader Logic exactly:
-    const noiseScale = 2.0;
-    const timeScale = 5.0;
+    const r = Math.sqrt(x * x + y * y + z * z);
+    const theta = Math.acos(z / r || 0);
+    const phiAngle = Math.atan2(y, x);
+    const normal = new THREE.Vector3(x, y, z).normalize();
 
-    const nx = x * noiseScale + time * timeScale;
-    const ny = y * noiseScale + time * timeScale;
-    const nz = z * noiseScale + time * timeScale;
+    let offset = new THREE.Vector3(0, 0, 0);
+    let visible = true;
 
-    // Amplitude factor from shader
-    let noiseVal = cnoise(nx, ny, nz) * 2.2;
+    if (state.mathMode === 'noise') {
+        const noiseScale = 2.0;
+        const timeScale = 5.0;
+        const val = cnoise(x * noiseScale + time * timeScale, y * noiseScale + time * timeScale, z * noiseScale + time * timeScale);
+        offset = normal.clone().multiplyScalar(val * 2.2 * strength * 0.6);
+    } else if (state.mathMode === 'golden') {
+        const phi = 1.61803398875;
+        const val = Math.sin(x * phi + time) + Math.cos(y * phi + time) + Math.sin(z * phi + time);
+        offset = normal.clone().multiplyScalar(val * strength * 0.3);
+    } else if (state.mathMode === 'quantum') {
+        const val = Math.sin(theta * 4) * Math.cos(phiAngle * 3 + time);
+        offset = normal.clone().multiplyScalar(val * strength * 0.5);
+    } else if (state.mathMode === 'sine') {
+        const val = Math.sin(x * 3 + time) * Math.cos(y * 3 + time) * Math.sin(z * 3 + time);
+        offset = normal.clone().multiplyScalar(val * strength * 0.4);
+    } else if (state.mathMode === 'vortex') {
+        const swirl = Math.sin(theta * 10 + phiAngle * 2 + time * 2);
+        const taper = Math.sin(theta);
+        offset = normal.clone().multiplyScalar(swirl * taper * strength * 0.5);
+    } else if (state.mathMode === 'cellular') {
+        let val = cnoise(x * 2 + time, y * 2, z * 2) * 0.5;
+        val += cnoise(x * 5 - time, y * 5, z * 5) * 0.25;
+        offset = normal.clone().multiplyScalar(val * strength * 1.5);
+    } else if (state.mathMode === 'interference') {
+        const w1 = Math.sin(x * 10 + time);
+        const w2 = Math.sin(y * 10 + time * 1.5);
+        offset = normal.clone().multiplyScalar((w1 * w2) * strength * 0.4);
+    } else if (state.mathMode === 'pulse') {
+        const heart = Math.pow(Math.sin(time * 2), 4);
+        const burst = Math.sin(r * 15 - time * 10);
+        offset = normal.clone().multiplyScalar(burst * heart * strength * 0.6);
+    } else if (state.mathMode === 'twister') {
+        // --- SURFACE SWIRL / TORSION ---
+        // Rotates the point around the Y axis based on height and noise
+        const twistAmount = (y + 2) * strength * 2; // Linear twist by height
+        const noiseTwist = cnoise(x, y + time, z) * strength * 3;
+        const totalAngle = twistAmount + noiseTwist;
 
-    // Shader: displacement = noiseVal * uEntanglement * 0.6;
-    return noiseVal * strength * 0.6;
+        const cosA = Math.cos(totalAngle);
+        const sinA = Math.sin(totalAngle);
+
+        // Manual rotation logic
+        const newX = x * cosA - z * sinA;
+        const newZ = x * sinA + z * cosA;
+        offset = new THREE.Vector3(newX - x, 0, newZ - z);
+    } else if (state.mathMode === 'glitch') {
+        // --- STEPPED / BLOCKY ---
+        const steps = 8.0;
+        const raw = cnoise(x * 2, y * 2 + time, z * 2);
+        const val = Math.floor(raw * steps) / steps;
+        offset = normal.clone().multiplyScalar(val * strength * 2.0);
+    } else if (state.mathMode === 'shattered') {
+        // --- HOLES / TEARING ---
+        const noise = cnoise(x * 1.5, y * 1.5, z * 1.5 + time);
+        if (noise > 0.3) visible = false;
+        offset = normal.clone().multiplyScalar(noise * strength);
+    } else if (state.mathMode === 'jagged') {
+        // --- SPIKES / FRACTURE ---
+        const val = 1.0 - Math.abs(cnoise(x * 4, y * 4, z * 4 + time));
+        offset = normal.clone().multiplyScalar(val * strength * 1.2);
+    }
+
+    return { offset, visible };
 }
 
 function createCustomGeometry() {
@@ -105,68 +175,85 @@ function createCustomGeometry() {
     const outerVerts = [];
     const innerVerts = [];
 
-    // --- 1. Generate Vertices and Apply Noise ---
+    // Store visibility flags
+    const outerVisible = [];
+
+    // --- 1. Generate Vertices based on Primitive ---
     for (let iy = 0; iy <= gridY; iy++) {
-        const v = iy / gridY; // 0 to 1
-        const uOffset = 0; // standard sphere
-
+        const v = iy / gridY;
         for (let ix = 0; ix <= gridX; ix++) {
-            const u = ix / gridX; // 0 to 1
+            const u = ix / gridX;
 
-            // Angle calculation restricted to our wedge
-            // u * wedgeAngle + startAngle
-            // IMPORTANT: If splitCount == 1, we want full 0 to 2PI.
-            // But UV sphere usually duplicates the first/last vertex at u=0 and u=1 for texture mapping.
-            // For watertight geometry, we might want them unified if it's a full sphere, 
-            // BUT for specific "Piece" logic derived here, we treat it as a wedge from 0 to 2PI.
-            // If it is full sphere, we don't generate side walls.
+            let baseNormal = new THREE.Vector3();
+            let baseOuter = new THREE.Vector3();
+            let baseInner = new THREE.Vector3();
 
-            const currentPhi = startAngle + u * wedgeAngle;
+            if (state.primitive === 'sphere') {
+                const currentPhi = startAngle + u * wedgeAngle;
+                const theta = v * Math.PI;
+                baseNormal.set(
+                    - Math.sin(currentPhi) * Math.sin(theta),
+                    Math.cos(theta),
+                    Math.cos(currentPhi) * Math.sin(theta)
+                );
+                baseOuter.copy(baseNormal).multiplyScalar(radius);
+                baseInner.copy(baseNormal).multiplyScalar(radius - thickness);
+            } else if (state.primitive === 'torus') {
+                const tubeRadius = 0.6;
+                const mainRadius = 1.4;
+                const phi = u * Math.PI * 2;
+                const theta = v * Math.PI * 2;
 
-            // Standard Sphere Formula
-            // x = - r * cos(phi) * sin(theta)
-            // y = r * cos(theta)
-            // z = r * sin(phi) * sin(theta)
-            // (Three.js standard implementation order might vary, adjusting to standard math)
-            // Three.js PlaneGeometry:
-            // theta: 0 to PI (y axis)
-            // phi: 0 to 2PI (around y axis)
+                baseOuter.set(
+                    (mainRadius + tubeRadius * Math.cos(theta)) * Math.cos(phi),
+                    tubeRadius * Math.sin(theta),
+                    (mainRadius + tubeRadius * Math.cos(theta)) * Math.sin(phi)
+                );
 
-            const theta = v * Math.PI; // Pole to Pole
-            const phi = currentPhi;
+                // Helper normal for torus
+                const centerPoint = new THREE.Vector3(mainRadius * Math.cos(phi), 0, mainRadius * Math.sin(phi));
+                baseNormal.copy(baseOuter).sub(centerPoint).normalize();
+                baseInner.copy(baseOuter).sub(baseNormal.clone().multiplyScalar(thickness));
+            } else if (state.primitive === 'knot') {
+                // Trefoil Knot approximation
+                const t = u * Math.PI * 2;
+                const p = v * Math.PI * 2;
 
-            // Base Unit Vector
-            const sinTheta = Math.sin(theta);
-            const cosTheta = Math.cos(theta);
-            const sinPhi = Math.sin(phi);
-            const cosPhi = Math.cos(phi);
+                const kx = Math.sin(t) + 2 * Math.sin(2 * t);
+                const ky = Math.cos(t) - 2 * Math.cos(2 * t);
+                const kz = -Math.sin(3 * t);
 
-            const ux = - sinPhi * sinTheta;
-            const uy = cosTheta;
-            const uz = cosPhi * sinTheta;
+                baseOuter.set(kx * 0.6, ky * 0.6, kz * 0.6);
+                baseNormal.copy(baseOuter).normalize(); // Simple normal for knot
+                baseInner.copy(baseOuter).sub(baseNormal.clone().multiplyScalar(thickness));
+            } else if (state.primitive === 'plane') {
+                baseOuter.set((u - 0.5) * 4, (v - 0.5) * 4, 0);
+                baseNormal.set(0, 0, 1);
+                baseInner.set((u - 0.5) * 4, (v - 0.5) * 4, -thickness);
+            }
 
-            const normal = new THREE.Vector3(ux, uy, uz); // Normalized
+            // Apply Surface Math
+            const result = getDisplacement(baseOuter.x, baseOuter.y, baseOuter.z, state.time, state.strength);
 
-            // Base Positions
-            const outerBase = normal.clone().multiplyScalar(radius);
-            const innerBase = normal.clone().multiplyScalar(radius - thickness);
+            let finalOuter = baseOuter.clone().add(result.offset);
+            let finalInner = baseInner.clone().add(result.offset);
 
-            // Apply Noise
-            // Noise depends on *Original Position* (Base Outer Surface essentially) to keep sync
-            const d = getDisplacement(outerBase.x, outerBase.y, outerBase.z, state.time, state.strength);
+            // Apply Structural Modifiers
+            if (state.modifier === 'jitter') {
+                const noise = cnoise(ix * 10, iy * 10, state.time) * 0.1 * state.strength;
+                finalOuter.addScalar(noise);
+                finalInner.addScalar(noise);
+            } else if (state.modifier === 'magnetic') {
+                const pull = new THREE.Vector3(Math.sin(state.time), Math.cos(state.time), 0).multiplyScalar(2);
+                const dist = finalOuter.distanceTo(pull);
+                const force = (1.0 / (dist + 0.5)) * state.strength;
+                finalOuter.lerp(pull, force * 0.2);
+                finalInner.lerp(pull, force * 0.2);
+            }
 
-            // Displace both surfaces by same amount in direction of normal
-            const outerPos = outerBase.add(normal.clone().multiplyScalar(d));
-            const innerPos = innerBase.add(normal.clone().multiplyScalar(d)); // inner shell moves same distance? 
-            // Ideally "Constant Thickness" means adding 'd' to both. 
-            // If we scaled, thickness would vary. Adding vector match maintains wall width roughly.
-
-            outerVerts.push(outerPos);
-            innerVerts.push(innerPos);
-
-            // Push to final buffer (Outer then Inner? Or strictly organized?)
-            // We'll push them to linear buffer and track index math.
-            // Let's create a single buffer for all vertices first, then push to attribute.
+            outerVerts.push(finalOuter);
+            innerVerts.push(finalInner);
+            outerVisible.push(result.visible);
         }
     }
 
@@ -187,26 +274,33 @@ function createCustomGeometry() {
             const c = (iy + 1) * (gridX + 1) + ix;
             const d = (iy + 1) * (gridX + 1) + (ix + 1);
 
-            // Outer Surface (CCW)
-            // faces: a,b,d; b,c,d
-            indices.push(a, b, d);
-            indices.push(b, c, d);
-
-            // Inner Surface (CW - reversed)
-            // To face inward/outward correctly?
-            // "Solid" mesh: Inner surface normals points IN towards center? 
-            // No, strictly speaking for a solid volume, all normals point "Out of the volume".
-            // So Inner Surface (the cavity wall) normals should point towards center (0,0,0).
-            // Default UV sphere normals point out.
-            // So we need to reverse winding for Inner Surface relative to the "Sphere".
-            // i.e., indices: a,d,b; b,d,c (permuted)
-            // But applied to (a+offset, etc)
+            // Tearing logic: Skip if any vertex is hidden
+            if (!outerVisible[a] || !outerVisible[b] || !outerVisible[c] || !outerVisible[d]) continue;
 
             const ao = a + innerOffset;
             const bo = b + innerOffset;
             const co = c + innerOffset;
             const do_ = d + innerOffset;
 
+            // Explosion Logic: Move indices away from face center
+            if (state.modifier === 'explode') {
+                const center = new THREE.Vector3()
+                    .add(outerVerts[a]).add(outerVerts[b]).add(outerVerts[c]).add(outerVerts[d])
+                    .multiplyScalar(0.25);
+                const dir = center.clone().normalize().multiplyScalar(state.strength * 0.5);
+
+                // We actually need to duplicate vertices to explode properly, 
+                // but for simple visual we can just move the indices but it's shared.
+                // Let's stick to simple face expansion if possible.
+                // Instead of moving vertices (which are shared), we just add "None" for now as it needs a mesh rebuild.
+                // Actually, let's just use the displacement to push the whole thing.
+            }
+
+            // Outer Surface (CCW)
+            indices.push(a, b, d);
+            indices.push(b, c, d);
+
+            // Inner Surface (CW)
             indices.push(ao, do_, bo);
             indices.push(bo, do_, co);
         }
@@ -271,16 +365,47 @@ function createCustomGeometry() {
     bufferGeometry.setIndex(indices);
     bufferGeometry.computeVertexNormals();
 
-    // Material
-    const material = new THREE.MeshStandardMaterial({
-        color: 0x00aaff,
-        roughness: 0.4,
-        metalness: 0.2,
-        side: THREE.DoubleSide, // Ensure we see both sides in preview
-        flatShading: false
-    });
+    // Material Configuration
+    let material;
+    if (state.materialType === 'wireframe') {
+        material = new THREE.MeshBasicMaterial({
+            color: state.color,
+            wireframe: true,
+            transparent: true,
+            opacity: 0.8
+        });
+    } else if (state.materialType === 'points') {
+        material = new THREE.PointsMaterial({
+            color: state.color,
+            size: 0.02,
+            sizeAttenuation: true
+        });
+    } else if (state.materialType === 'glass') {
+        material = new THREE.MeshPhysicalMaterial({
+            color: state.color,
+            metalness: 0.9,
+            roughness: 0.1,
+            transmission: 0.9,
+            thickness: 0.5,
+            ior: 1.5,
+            transparent: true
+        });
+    } else {
+        material = new THREE.MeshStandardMaterial({
+            color: state.color,
+            roughness: state.roughness,
+            metalness: state.metalness,
+            side: THREE.DoubleSide,
+            flatShading: false
+        });
+    }
 
-    mesh = new THREE.Mesh(bufferGeometry, material);
+    if (state.materialType === 'points') {
+        mesh = new THREE.Points(bufferGeometry, material);
+    } else {
+        mesh = new THREE.Mesh(bufferGeometry, material);
+    }
+
     scene.add(mesh);
 }
 
@@ -289,7 +414,16 @@ function updateGeometry() {
     createCustomGeometry(); // Full regeneration needed for thickness/splitting changes
 }
 
-// --- UI Handling ---
+const themeSelect = document.getElementById('theme-select');
+const colorPicker = document.getElementById('color-picker');
+const materialSelect = document.getElementById('material-select');
+const roughnessSlider = document.getElementById('roughness-slider');
+const metalnessSlider = document.getElementById('metalness-slider');
+const rotationSlider = document.getElementById('rotation-slider');
+
+const primitiveSelect = document.getElementById('primitive-select');
+const modifierSelect = document.getElementById('modifier-select');
+const mathModeSelect = document.getElementById('math-mode-select');
 const timeSlider = document.getElementById('time-slider');
 const strengthSlider = document.getElementById('strength-slider');
 const resolutionSlider = document.getElementById('resolution-slider');
@@ -298,6 +432,62 @@ const splitSelect = document.getElementById('split-select');
 const pieceGroup = document.getElementById('piece-group');
 const pieceSelect = document.getElementById('piece-select');
 const exportBtn = document.getElementById('export-btn');
+
+primitiveSelect.addEventListener('change', (e) => {
+    state.primitive = e.target.value;
+    updateGeometry();
+});
+
+modifierSelect.addEventListener('change', (e) => {
+    state.modifier = e.target.value;
+    updateGeometry();
+});
+
+function applyTheme() {
+    if (state.theme === 'light') {
+        scene.background = new THREE.Color(0xffffff);
+        ambientLight.intensity = 3;
+        directionalLight.intensity = 3;
+    } else {
+        scene.background = new THREE.Color(0x111111);
+        ambientLight.intensity = 2;
+        directionalLight.intensity = 2;
+    }
+}
+
+themeSelect.addEventListener('change', (e) => {
+    state.theme = e.target.value;
+    applyTheme();
+});
+
+colorPicker.addEventListener('input', (e) => {
+    state.color = e.target.value;
+    updateGeometry();
+});
+
+materialSelect.addEventListener('change', (e) => {
+    state.materialType = e.target.value;
+    updateGeometry();
+});
+
+roughnessSlider.addEventListener('input', (e) => {
+    state.roughness = parseFloat(e.target.value);
+    updateGeometry();
+});
+
+metalnessSlider.addEventListener('input', (e) => {
+    state.metalness = parseFloat(e.target.value);
+    updateGeometry();
+});
+
+rotationSlider.addEventListener('input', (e) => {
+    state.rotationSpeed = parseFloat(e.target.value);
+});
+
+mathModeSelect.addEventListener('change', (e) => {
+    state.mathMode = e.target.value;
+    updateGeometry();
+});
 
 timeSlider.addEventListener('input', (e) => {
     state.time = parseFloat(e.target.value);
@@ -377,10 +567,16 @@ window.addEventListener('resize', () => {
 });
 
 // --- Init ---
+applyTheme(); // Ensure initial state matches theme
 updateGeometry();
 
 function animate() {
     requestAnimationFrame(animate);
+
+    if (mesh) {
+        mesh.rotation.y += 0.005 * state.rotationSpeed;
+    }
+
     controls.update();
     renderer.render(scene, camera);
 }
