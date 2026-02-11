@@ -82,6 +82,18 @@
                     <label><input type="checkbox" id="toggle-sound"> Enable Sound</label>
                 </div>
                 <div class="shader-toggle" style="margin-top:10px;">
+                    <label style="display:block;margin-bottom:5px;font-size:10px;">Input Device <span id="mic-channels"
+                            style="color:#888;font-size:9px;"></span></label>
+                    <select id="mic-device"
+                        style="width:100%;padding:5px;background:#002222;color:#00ffff;border:1px solid #00ffff;border-radius:5px;font-size:10px;margin-bottom:5px;">
+                        <option value="">Default Device</option>
+                    </select>
+                    <select id="mic-mapping"
+                        style="width:100%;padding:5px;background:#002222;color:#00ffff;border:1px solid #00ffff;border-radius:5px;font-size:10px;margin-bottom:10px;">
+                        <option value="Direct">Direct 1:1 Map</option>
+                        <option value="StereoPairs">Force Stereo Pairs (0+2, 1+3)</option>
+                        <option value="Mirrored">Mirror Stereo (0+1, 2+3)</option>
+                    </select>
                     <button id="start-mic"
                         style="width:100%;padding:8px;background:#004444;color:#00ffff;border:1px solid #00ffff;border-radius:5px;cursor:pointer;font-family:inherit;font-size:11px;">Start
                         Live Mic (Input)</button>

@@ -602,11 +602,68 @@ document.getElementById('sound-resonance').addEventListener('input', (e) => {
     quantumSound.setResonance(value / 100);
 });
 
-document.getElementById('start-mic').addEventListener('click', async () => {
-    await micManager.init();
-    document.getElementById('start-mic').textContent = micManager.enabled ? 'Live Mic Active' : 'Retry Mic';
-    document.getElementById('start-mic').style.background = micManager.enabled ? '#007777' : '#440000';
+async function refreshMicList() {
+    const devices = await micManager.getDevices();
+    const select = document.getElementById('mic-device');
+    const currentValue = select.value;
+
+    // Keep 'Default' as first option
+    select.innerHTML = '<option value="">Default Device</option>';
+
+    devices.forEach(device => {
+        const option = document.createElement('option');
+        option.value = device.deviceId;
+        option.text = device.label || `Microphone ${device.deviceId.slice(0, 5)}...`;
+        select.appendChild(option);
+    });
+
+    if (currentValue) {
+        select.value = currentValue;
+    }
+}
+
+const updateChannelDisplay = () => {
+    const channelsSpan = document.getElementById('mic-channels');
+    if (channelsSpan && micManager.activeChannels) {
+        if (micManager.activeChannels < 4) {
+            channelsSpan.textContent = `(${micManager.activeChannels} ch - Bridged)`;
+            channelsSpan.style.color = '#ffaa00';
+            channelsSpan.title = `Bridged Mode: Input only has ${micManager.activeChannels} CH. Qubits recycle available channels (Q0=Ch0, Q1=Ch1, Q2=Ch0...)`;
+        } else {
+            channelsSpan.textContent = `(${micManager.activeChannels} ch)`;
+            channelsSpan.style.color = '#888';
+            channelsSpan.title = '4+ Discrete Channels Detected. Each Qubit has a unique Mic.';
+        }
+    }
+};
+
+async function startMic() {
+    const deviceId = document.getElementById('mic-device').value;
+    const mappingMode = document.getElementById('mic-mapping').value;
+    await micManager.init(deviceId, mappingMode);
+
+    await refreshMicList();
+    updateChannelDisplay();
+
+    const btn = document.getElementById('start-mic');
+    btn.textContent = micManager.enabled ? 'Live Mic Active' : 'Retry Mic';
+    btn.style.background = micManager.enabled ? '#007777' : '#440000';
+}
+
+document.getElementById('start-mic').addEventListener('click', startMic);
+
+document.getElementById('mic-device').addEventListener('change', async () => {
+    if (micManager.enabled) {
+        await startMic();
+    }
 });
+
+document.getElementById('mic-mapping').addEventListener('change', async () => {
+    if (micManager.enabled) {
+        await startMic();
+    }
+});
+
 
 let uiVisible = true;
 document.getElementById('toggle-ui').addEventListener('click', () => {
@@ -860,4 +917,16 @@ window.addEventListener('resize', () => {
     renderer.setSize(window.innerWidth, window.innerHeight);
     composer.setSize(window.innerWidth, window.innerHeight);
     lensingPass.uniforms.uResolution.value.set(window.innerWidth, window.innerHeight);
+});
+
+// Try to populate if permission already exists
+navigator.permissions.query({ name: 'microphone' }).then(permissionStatus => {
+    if (permissionStatus.state === 'granted') {
+        refreshMicList();
+    }
+    permissionStatus.onchange = () => {
+        if (permissionStatus.state === 'granted') {
+            refreshMicList();
+        }
+    };
 });

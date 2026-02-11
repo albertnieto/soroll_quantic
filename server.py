@@ -9,10 +9,17 @@ app = FastAPI()
 
 # Map circuit names to engine methods
 CIRCUIT_MAP = {
-    "bell_state": engine.get_bell_state,
     "phase_evolution": engine.get_phase_evolution,
     "random_rotation": engine.get_random_rotation,
 }
+
+
+@app.middleware("http")
+async def add_cache_control_header(request, call_next):
+    response = await call_next(request)
+    if request.url.path.startswith(("/src", "/assets", "/circuits")):
+        response.headers["Cache-Control"] = "public, max-age=3600"
+    return response
 
 
 @app.get("/api/circuit")
