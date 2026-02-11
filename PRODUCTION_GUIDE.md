@@ -55,13 +55,7 @@ The installation supports a 4-channel microphone setup (e.g., Boya interface).
 3.  **In-App Configuration**:
     *   Click "Start Live Mic" on the interface.
     *   A dropdown will appear. Select your USB device.
-    *   **Check the indicator**: You should see `(4 ch)` in grey text.
-    *   **Mapping Mode**: If you see "4 ch" but the mics still mix together, try changing the mapping mode dropdown:
-        *   **Direct**: Default. 1 mic = 1 qubit.
-        *   **Force Stereo Pairs**: Forces Q0/Q2 to Left and Q1/Q3 to Right. Useful if the browser sees 4ch but the OS is just copying a Stereo Left/Right pair.
-        *   **Mics A & C** -> Drive Qubits 0 & 2.
-        *   **Mics B & D** -> Drive Qubits 1 & 3.
-        *   This allows all 4 mics to work, but they are paired. This is a hardware limitation of the USB receiver.
+    *   **Note**: If your signal is mixed (all qubits react at once), it means your Boya hardware is outputting a Stereo mix instead of 4 discrete channels. The application will automatically handle this by driving all qubits with the available signal, but they may react together.
     *   **Troubleshooting Crosstalk**: If you see `(4 ch)` but one mic triggers all qubits:
         1. Open **Audio MIDI Setup**.
         2. Select your device.

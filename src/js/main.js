@@ -235,6 +235,10 @@ initialPositions.forEach((pos, i) => {
     createQubitSphere(pos, i);
 });
 
+// Initialize Mic Random Target
+window.micTargetIndex = 0;
+window.lastMicTargetTime = 0;
+
 let autoExecute = false;
 let autoExecuteInterval = null;
 let currentMode = 'manual';
@@ -622,28 +626,12 @@ async function refreshMicList() {
     }
 }
 
-const updateChannelDisplay = () => {
-    const channelsSpan = document.getElementById('mic-channels');
-    if (channelsSpan && micManager.activeChannels) {
-        if (micManager.activeChannels < 4) {
-            channelsSpan.textContent = `(${micManager.activeChannels} ch - Bridged)`;
-            channelsSpan.style.color = '#ffaa00';
-            channelsSpan.title = `Bridged Mode: Input only has ${micManager.activeChannels} CH. Qubits recycle available channels (Q0=Ch0, Q1=Ch1, Q2=Ch0...)`;
-        } else {
-            channelsSpan.textContent = `(${micManager.activeChannels} ch)`;
-            channelsSpan.style.color = '#888';
-            channelsSpan.title = '4+ Discrete Channels Detected. Each Qubit has a unique Mic.';
-        }
-    }
-};
 
 async function startMic() {
     const deviceId = document.getElementById('mic-device').value;
-    const mappingMode = document.getElementById('mic-mapping').value;
-    await micManager.init(deviceId, mappingMode);
+    await micManager.init(deviceId);
 
     await refreshMicList();
-    updateChannelDisplay();
 
     const btn = document.getElementById('start-mic');
     btn.textContent = micManager.enabled ? 'Live Mic Active' : 'Retry Mic';
@@ -658,11 +646,6 @@ document.getElementById('mic-device').addEventListener('change', async () => {
     }
 });
 
-document.getElementById('mic-mapping').addEventListener('change', async () => {
-    if (micManager.enabled) {
-        await startMic();
-    }
-});
 
 
 let uiVisible = true;
@@ -865,21 +848,42 @@ function animate() {
         updateQuantumStateDisplay();
     }
 
+    // Audio Processing
     if (micManager.enabled) {
         micManager.update();
+
+        // Single energy source from the mixed input
+        const globalEnergy = micManager.getEnergy();
+
+        // Randomly target a qubit to apply this energy to
+        // We change the target every few frames to make it look active but not chaotic
+        const now = Date.now();
+        if (!window.lastMicTargetTime || now - window.lastMicTargetTime > 100) {
+            window.micTargetIndex = Math.floor(Math.random() * 4);
+            window.lastMicTargetTime = now;
+        }
+
         for (let i = 0; i < 4; i++) {
-            const energy = micManager.getEnergy(i);
-            micThresholds[i] = energy;
+            // Only apply energy to the random target
+            const energy = (i === window.micTargetIndex) ? globalEnergy : 0;
+
+            // Smooth decay for non-active qubits so they don't snap to 0
+            // If it's the target, use the real energy. If not, decay existing value.
+            if (i === window.micTargetIndex) {
+                micThresholds[i] = energy;
+            } else {
+                micThresholds[i] = micThresholds[i] * 0.9;
+            }
 
             const valueEl = document.getElementById(`value${i}`);
             const indicatorEl = document.getElementById(`indicator${i}`);
             const sliderEl = document.getElementById(`mic${i}`);
 
-            if (valueEl) valueEl.textContent = energy.toFixed(2);
-            if (indicatorEl) indicatorEl.style.width = (energy * 100) + '%';
-            if (sliderEl) sliderEl.value = energy * 100;
+            if (valueEl) valueEl.textContent = micThresholds[i].toFixed(2);
+            if (indicatorEl) indicatorEl.style.width = (micThresholds[i] * 100) + '%';
+            if (sliderEl) sliderEl.value = micThresholds[i] * 100;
 
-            if (energy > THRESHOLD_LIMIT && qubits[i].coherent) {
+            if (micThresholds[i] > THRESHOLD_LIMIT && qubits[i].coherent) {
                 if (indicatorEl) indicatorEl.classList.add('breach');
                 qubits[i].collapse(Math.random() > 0.5 ? 1 : 0);
             } else if (indicatorEl) {
