@@ -1,6 +1,5 @@
 export class MicManager {
     constructor() {
-        // We now treat the input as a SINGLE aggregated source
         this.numChannels = 1;
         this.audioContext = null;
         this.stream = null;
@@ -9,6 +8,11 @@ export class MicManager {
         this.energy = 0;
         this.enabled = false;
         this.source = null;
+
+        // Calibration & Masking
+        this.calibrationMode = false;
+        this.calibrationMask = null; // Buffer of max magnitudes [0-255]
+        this.tempMask = null;        // Used during active calibration sweep
     }
 
     async getDevices() {
@@ -35,48 +39,91 @@ export class MicManager {
             const constraints = {
                 audio: {
                     deviceId: deviceId ? { exact: deviceId } : undefined,
-                    channelCount: { ideal: 1 }, // Just want mono mix
+                    channelCount: { ideal: 1 },
                     echoCancellation: false,
                     noiseSuppression: false,
                     autoGainControl: false
                 }
             };
 
-            console.log('Requesting mic with constraints:', constraints);
             this.stream = await navigator.mediaDevices.getUserMedia(constraints);
             const source = this.audioContext.createMediaStreamSource(this.stream);
 
             this.analyser = this.audioContext.createAnalyser();
-            this.analyser.fftSize = 256;
-            this.analyser.smoothingTimeConstant = 0.5;
+            this.analyser.fftSize = 512; // Higher resolution for better masking
+            this.analyser.smoothingTimeConstant = 0.2; // Faster response for calibration
             this.dataArray = new Uint8Array(this.analyser.frequencyBinCount);
 
             this.source = source;
             source.connect(this.analyser);
 
             this.enabled = true;
-            console.log('MicManager initialized in MONO mode');
+            console.log('MicManager initialized in FFT mode');
         } catch (error) {
             console.error('Error accessing microphone:', error);
             this.enabled = false;
         }
     }
 
+    startCalibration() {
+        this.calibrationMode = true;
+        this.tempMask = new Uint8Array(this.analyser.frequencyBinCount).fill(0);
+        console.log("[MicManager] Calibration started...");
+    }
+
+    stopCalibration() {
+        this.calibrationMode = false;
+        this.calibrationMask = new Uint8Array(this.tempMask);
+        this.tempMask = null;
+        console.log("[MicManager] Calibration finished. Mask captured.");
+        return Array.from(this.calibrationMask); // Return for saving
+    }
+
+    setStoredMask(maskArray) {
+        if (maskArray && maskArray.length === this.analyser.frequencyBinCount) {
+            this.calibrationMask = new Uint8Array(maskArray);
+            console.log("[MicManager] Applied stored calibration mask.");
+        }
+    }
+
     update() {
         if (!this.enabled || !this.analyser) return;
 
-        this.analyser.getByteTimeDomainData(this.dataArray);
+        // Use Frequency Domain (FFT) instead of Time Domain (RMS)
+        this.analyser.getByteFrequencyData(this.dataArray);
 
-        // Calculate RMS energy
-        let sum = 0;
-        for (let j = 0; j < this.dataArray.length; j++) {
-            const val = (this.dataArray[j] - 128) / 128;
-            sum += val * val;
+        if (this.calibrationMode && this.tempMask) {
+            // Keep the peaks of everything we hear during calibration
+            for (let i = 0; i < this.dataArray.length; i++) {
+                if (this.dataArray[i] > this.tempMask[i]) {
+                    this.tempMask[i] = this.dataArray[i];
+                }
+            }
         }
-        const rms = Math.sqrt(sum / this.dataArray.length);
+
+        let totalEnergy = 0;
+        let count = 0;
+
+        for (let i = 0; i < this.dataArray.length; i++) {
+            let magnitude = this.dataArray[i];
+
+            // Apply Masking: Subtract the room fingerprint
+            if (this.calibrationMask && !this.calibrationMode) {
+                // We subtract the mask and add a small safety margin (buffer)
+                // A higher margin means more aggressive noise cancellation
+                const margin = 10;
+                magnitude = Math.max(0, magnitude - (this.calibrationMask[i] + margin));
+            }
+
+            // Square it for "energy-like" distribution
+            totalEnergy += (magnitude / 255) * (magnitude / 255);
+            count++;
+        }
+
+        const instantEnergy = Math.sqrt(totalEnergy / count);
 
         // Smoothing
-        this.energy = this.energy * 0.7 + rms * 3.0 * 0.3;
+        this.energy = this.energy * 0.7 + (instantEnergy * 5.0) * 0.3;
         if (this.energy > 1.0) this.energy = 1.0;
     }
 

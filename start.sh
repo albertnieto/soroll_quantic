@@ -19,9 +19,21 @@ if [ ! -d ".venv" ]; then
     python3 -m venv .venv
 fi
 
-# Install/Update dependencies
-echo "📦 Installing dependencies..."
-./.venv/bin/pip install -r requirements.txt
+# Optimization: Only install if requirements.txt updated or fresh install
+LAST_INSTALL=".venv/.last_install"
+if [ ! -f "$LAST_INSTALL" ] || [ requirements.txt -nt "$LAST_INSTALL" ]; then
+    echo "📦 Updating dependencies (this may take a moment)..."
+    ./.venv/bin/pip install -r requirements.txt --quiet
+    touch "$LAST_INSTALL"
+fi
+
+# npm dependency check (handles 'man' typo/requirement)
+if [ -f "package.json" ] && grep -qE "\"dependencies\"|\"devDependencies\"" package.json; then
+    if [ ! -d "node_modules" ] || [ package.json -nt "node_modules" ]; then
+        echo "📦 Updating npm modules..."
+        npm install --quiet
+    fi
+fi
 
 start_server() {
     echo "🚀 Server launching at http://localhost:8050"

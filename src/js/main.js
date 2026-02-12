@@ -47,6 +47,10 @@ const quantumCircuit = new QuantumCircuit();
 const quantumSound = new QuantumSound();
 const micManager = new MicManager();
 
+// Expose globally for console access
+window.quantumSound = quantumSound;
+window.micManager = micManager;
+
 const plasmaTarget = new THREE.WebGLRenderTarget(1024, 1024);
 const rtCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
 const rtScene = new THREE.Scene();
@@ -683,6 +687,57 @@ document.getElementById('sound-resonance').addEventListener('input', (e) => {
 document.getElementById('sound-mode').addEventListener('change', (e) => {
     quantumSound.setMode(e.target.value);
 });
+
+// --- Tuning & Calibration Logic ---
+async function refreshCalibrationProfiles() {
+    const profiles = await quantumSound.listCalibrations();
+    const select = document.getElementById('calibration-profile');
+    const currentValue = select.value;
+
+    select.innerHTML = '<option value="">No Profile Loaded</option>';
+    profiles.forEach(name => {
+        const option = document.createElement('option');
+        option.value = name;
+        option.text = name.replace(/_/g, ' ');
+        select.appendChild(option);
+    });
+
+    if (currentValue) select.value = currentValue;
+}
+
+document.getElementById('run-calibration').addEventListener('click', async () => {
+    const btn = document.getElementById('run-calibration');
+    const originalText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "CALIBRATING... (EMPTY ROOM PLEASE)";
+    btn.style.background = "#440000";
+
+    try {
+        const mask = await quantumSound.runCalibrationSweep(micManager);
+        const name = prompt("Enter a name for this room calibration:", "Default_Room");
+        if (name) {
+            await quantumSound.saveCalibration(name, mask);
+            await refreshCalibrationProfiles();
+            document.getElementById('calibration-profile').value = name;
+        }
+    } finally {
+        btn.disabled = false;
+        btn.textContent = originalText;
+        btn.style.background = "#444400";
+    }
+});
+
+document.getElementById('calibration-profile').addEventListener('change', async (e) => {
+    const name = e.target.value;
+    if (name) {
+        await quantumSound.loadCalibration(name, micManager);
+    } else {
+        micManager.calibrationMask = null; // Clear mask
+    }
+});
+
+// Initialize Profile List
+refreshCalibrationProfiles();
 
 async function refreshMicList() {
     const devices = await micManager.getDevices();

@@ -361,6 +361,92 @@ export class QuantumSound {
         }
     }
 
+    async runCalibrationSweep(micManager) {
+        if (!this.initialized || !micManager) return;
+        console.log("[QuantumSound] Starting high-speed calibration sweep...");
+
+        // 1. Enter calibration mode
+        micManager.startCalibration();
+        const originalVolume = this.masterVolumeValue;
+        this.setMasterVolume(100); // Max volume for sweep
+
+        // 2. Sweep the Synth (High speed frequency hops)
+        const sweepNotes = ["C1", "G1", "C2", "G2", "C3", "G3", "C4", "G4", "C5"];
+        for (const note of sweepNotes) {
+            this.quantumSynth.triggerAttackRelease(note, "16n");
+            await new Promise(r => setTimeout(r, 150));
+        }
+
+        // 3. Sweep the Samples (Rapid bursts of every track)
+        if (this.manifest) {
+            const categories = Object.keys(this.manifest);
+            for (const cat of categories) {
+                const tracks = this.manifest[cat];
+                for (const track of tracks) {
+                    const url = `assets/audio/loops/${cat}/${track}`;
+                    try {
+                        // Use a temporary player for the sweep to not interrupt current playback
+                        const sweepPlayer = new Tone.Player(url).toDestination();
+                        await sweepPlayer.load(url);
+                        sweepPlayer.start();
+                        await new Promise(r => setTimeout(r, 400)); // Play 400ms burst
+                        sweepPlayer.stop();
+                        sweepPlayer.dispose();
+                    } catch (e) {
+                        console.warn(`[QuantumSound] Sweep failed for ${url}`);
+                    }
+                }
+            }
+        }
+
+        // 4. Capture and Save
+        const mask = micManager.stopCalibration();
+        this.setMasterVolume(originalVolume * 100);
+
+        console.log("[QuantumSound] Sweep complete.");
+        return mask;
+    }
+
+    async saveCalibration(name, mask) {
+        try {
+            const response = await fetch('/api/calibration/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, mask })
+            });
+            return response.ok;
+        } catch (e) {
+            console.error("Failed to save calibration:", e);
+            return false;
+        }
+    }
+
+    async loadCalibration(name, micManager) {
+        try {
+            const response = await fetch(`/api/calibration/get/${name}`);
+            if (response.ok) {
+                const data = await response.json();
+                micManager.setStoredMask(data.mask);
+                return true;
+            }
+        } catch (e) {
+            console.error("Failed to load calibration:", e);
+        }
+        return false;
+    }
+
+    async listCalibrations() {
+        try {
+            const response = await fetch('/api/calibration/list');
+            if (response.ok) {
+                return await response.json();
+            }
+        } catch (e) {
+            console.error("Failed to list calibrations:", e);
+        }
+        return [];
+    }
+
     cleanup() {
         this.stopAll();
         if (this.initialized) {

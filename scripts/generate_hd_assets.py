@@ -38,6 +38,11 @@ def generate_production_library():
             "count": 8,
             "duration": 90,
         },
+        "glitch": {
+            "prompt": "ethereal white noise, soft static pulses, grainy quantum decoherence, digital fading, mechanical whispers, silence background",
+            "count": 8,
+            "duration": 90,
+        },
         "harmonic": {
             "prompt": "clear glass resonance, pure sine waves, evolving pads, airy atmosphere, beautiful, nítido",
             "count": 8,
@@ -45,11 +50,6 @@ def generate_production_library():
         },
         "rhythmic": {
             "prompt": "deep soft pulse, minimal rhythmic texture, warm bassline, hypnotic, clean production, cinematic",
-            "count": 8,
-            "duration": 90,
-        },
-        "glitch": {
-            "prompt": "ethereal white noise, soft static pulses, grainy quantum decoherence, digital fading, mechanical whispers, silence background",
             "count": 8,
             "duration": 90,
         },
@@ -70,16 +70,23 @@ def generate_production_library():
     base_output_dir = os.path.join(os.getcwd(), "assets/audio/loops")
     os.makedirs(base_output_dir, exist_ok=True)
 
+    category_order = ["ambient", "glitch", "harmonic", "rhythmic"]
     total_tasks = sum(cat["count"] for cat in categories.values())
+    max_tracks = max(cat["count"] for cat in categories.values())
     current_task = 0
 
-    for cat_name, config in categories.items():
-        cat_dir = os.path.join(base_output_dir, cat_name)
-        os.makedirs(cat_dir, exist_ok=True)
+    print(f"🎵 Sequential generation order: {', '.join(category_order)}")
 
-        for i in range(config["count"]):
+    for t_idx in range(max_tracks):
+        for cat_name in category_order:
+            config = categories[cat_name]
+            if t_idx >= config["count"]:
+                continue
+
             current_task += 1
-            filename = f"track_{i + 1:02d}.wav"
+            filename = f"track_{t_idx + 1:02d}.wav"
+            cat_dir = os.path.join(base_output_dir, cat_name)
+            os.makedirs(cat_dir, exist_ok=True)
             output_path = os.path.join(cat_dir, filename)
 
             if os.path.exists(output_path):
@@ -89,9 +96,9 @@ def generate_production_library():
                 continue
 
             # Inject Unique Descriptor for Variety
-            specific_vibe = descriptors[i % len(descriptors)]
+            specific_vibe = descriptors[t_idx % len(descriptors)]
             print(
-                f"[{current_task}/{total_tasks}] Generating {cat_name} ({specific_vibe})..."
+                f"[{current_task}/{total_tasks}] Generating {cat_name} ({specific_vibe}) - {filename}..."
             )
 
             # Combine Vibe + Base Prompt
