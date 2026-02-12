@@ -1,0 +1,9 @@
+- New long circuits
+- Add auto mode on selection on circuits running on a loop
+- Flash when we measure
+- Fix bug when collapsed
+- Will collapse turn to ground state or random state?
+- New sound modes
+- Additional animation on entanglement: see colors of others
+- Refactor qubit shader so you can clearly see rainbow colors
+- 
