@@ -18,68 +18,186 @@ export class QuantumSound {
         this.limiter = null;
         this.reverb = null;
         this.quantumSynth = null;
-        this.aiPlayers = null;
+        this.aiPlayers = null; // This will be replaced by crossfader, playerA, playerB
         this.micProcessor = null;
 
         this.baseNotes = ["C2", "E2", "G2", "C3"];
+        this.activeNotes = new Set();
+        this.manifest = null; // Will hold { "ambient": ["track_01.wav", ...], ... }
     }
 
     async init() {
-        if (this.initialized) return;
-
         await Tone.start();
-        console.log("Tone.js context started");
+        this.initialized = true;
 
-        // 1. Master Chain: Limiter -> Reverb -> Destination
-        this.limiter = new Tone.Limiter(-2).toDestination();
+        // Master Effects Chain
+        this.masterGain = new Tone.Gain(this.masterVolumeValue).toDestination();
+        this.limiter = new Tone.Limiter(-2).connect(this.masterGain);
         this.reverb = new Tone.Reverb({
-            decay: 4,
+            decay: 10,
+            preDelay: 0.2,
             wet: 0.3
         }).connect(this.limiter);
 
-        this.masterGain = new Tone.Gain(this.masterVolumeValue).connect(this.reverb);
-
-        // 2. Quantum Synth Engine
-        // Use an FMSynth for richer textures than raw sines
+        // --- 1. Quantum Synth (FM & AM) ---
         this.quantumSynth = new Tone.PolySynth(Tone.FMSynth, {
             harmonicity: 1.5,
             modulationIndex: 10,
             oscillator: { type: "sine" },
             envelope: {
-                attack: 0.1,
-                decay: 0.2,
+                attack: 0.5,
+                decay: 2,
                 sustain: 0.5,
-                release: 1
+                release: 4
             },
-            modulation: { type: "triangle" },
+            modulation: { type: "square" },
             modulationEnvelope: {
                 attack: 0.5,
                 decay: 0,
                 sustain: 1,
                 release: 0.5
             }
-        }).connect(this.masterGain);
+        }).connect(this.reverb);
 
-        // 3. AI Atmospheric Loops
-        this.aiPlayers = new Tone.Players({
-            void: "assets/audio/loops/ambient/quantum_void.wav",
-            glass: "assets/audio/loops/harmonic/glass_superposition.wav",
-            pulse: "assets/audio/loops/rhythmic/entangled_pulse.wav",
-            noise: "assets/audio/loops/glitch/decoherence_noise.wav"
-        }, () => {
-            console.log("AI Loops loaded");
-            // Set all to loop
-            Object.values(this.aiPlayers._players).forEach(p => {
-                p.loop = true;
-                p.fadeIn = 2;
-                p.fadeOut = 2;
-            });
-        }).connect(this.masterGain);
+        // --- 2. Smart Shuffle Engine (CrossFadeManager) ---
+        // Instead of loading all files at once, we manage two active players per category
+        // that we crossfade between.
+        this.activeCategory = 'ambient';
+        this.crossfader = new Tone.CrossFade(0).connect(this.reverb);
 
-        this.aiPlayers.volume.value = Tone.gainToDb(this.aiVolumeValue);
-        this.quantumSynth.volume.value = Tone.gainToDb(this.quantumVolumeValue);
+        this.playerA = new Tone.Player().connect(this.crossfader.a);
+        this.playerB = new Tone.Player().connect(this.crossfader.b);
 
-        this.initialized = true;
+        // Track History to avoid repetition
+        this.trackHistory = [];
+        this.categories = ['ambient', 'harmonic', 'rhythmic', 'glitch'];
+
+        // Start the first track
+        await this.loadManifest();
+        if (this.manifest && Object.keys(this.manifest).length > 0) {
+            this.scheduleNextTransition(1); // Start immediately
+        } else {
+            console.warn("[QuantumSound] No audio manifest found. Waiting...");
+            // Retry loading manifest later or just wait
+            setTimeout(() => this.init(), 5000);
+        }
+    }
+
+    async loadManifest() {
+        try {
+            const response = await fetch('/api/audio-manifest');
+            if (response.ok) {
+                this.manifest = await response.json();
+                console.log("[QuantumSound] Audio Manifest Loaded:", this.manifest);
+
+                // Update categories based on what we actually have
+                const availableCategories = Object.keys(this.manifest);
+                if (availableCategories.length > 0) {
+                    this.categories = availableCategories;
+                }
+            } else {
+                console.warn("[QuantumSound] Failed to load audio manifest");
+            }
+        } catch (e) {
+            console.error("[QuantumSound] Error loading audio manifest:", e);
+        }
+    }
+
+    // --- Smart Shuffle Logic ---
+    async scheduleNextTransition(delaySeconds = 0, retryCount = 0) {
+        if (!this.manifest || Object.keys(this.manifest).length === 0) {
+            console.warn("[QuantumSound] Manifest empty, retrying manifest load...");
+            await this.loadManifest();
+            if (!this.manifest || Object.keys(this.manifest).length === 0) {
+                setTimeout(() => this.scheduleNextTransition(0, 0), 5000);
+                return;
+            }
+        }
+
+        if (retryCount > 20) {
+            console.warn("[QuantumSound] Max retries reached. Waiting 10s before trying again.");
+            setTimeout(() => this.scheduleNextTransition(0, 0), 10000);
+            return;
+        }
+
+        // 1. Pick a category based on "Smart Shuffle" (rotate)
+        // If we are retrying, we MUST advance the category index to avoid getting stuck 
+        // in an empty active category (like 'harmonic' which is empty right now).
+        // offset = 1 (normal next) + retryCount. 
+        // If retry 0: next + 1. If retry 1 (fail): next + 2. etc.
+        const offset = 1 + retryCount;
+
+        // Ensure we accept whatever categories are in the manifest
+        const availableCategories = Object.keys(this.manifest);
+        if (availableCategories.length === 0) return; // Should be handled above
+
+        // Use availableCategories instead of this.categories to be safe, or sync them
+        const nextCatIdx = (availableCategories.indexOf(this.activeCategory) + offset) % availableCategories.length;
+        // If nextCatIdx is -1 (current inactive not found), start at 0
+        const actualIdx = nextCatIdx >= 0 ? nextCatIdx : 0;
+
+        let nextCategory = availableCategories[actualIdx];
+
+        // Get tracks for this category
+        const tracks = this.manifest[nextCategory];
+        if (!tracks || tracks.length === 0) {
+            // Category has no tracks, skip to next immediately
+            console.log(`[QuantumSound] Category ${nextCategory} is empty, skipping...`);
+            this.scheduleNextTransition(0, retryCount + 1);
+            return;
+        }
+
+        // 2. Pick a track from the manifest
+        const trackName = tracks[Math.floor(Math.random() * tracks.length)];
+        const url = `assets/audio/loops/${nextCategory}/${trackName}`;
+
+        // Don't log every retry if we are spamming
+        if (retryCount === 0) {
+            console.log(`[QuantumSound] Scheduling next: ${nextCategory}/${trackName} in ${delaySeconds}s`);
+        }
+
+        // 3. Determine which player is "Next" (not currently playing)
+        const nextPlayer = (this.crossfader.fade.value > 0.5) ? this.playerA : this.playerB;
+        const targetFade = (this.crossfader.fade.value > 0.5) ? 0 : 1;
+
+        // 4. Load Buffer & Transition
+        setTimeout(async () => {
+            try {
+                // This will throw if 404
+                await nextPlayer.load(url);
+
+                // --- SUCCESS ---
+                nextPlayer.start();
+                nextPlayer.volume.value = Tone.gainToDb(this.aiVolumeValue);
+
+                // Long Linear Crossfade (30s)
+                this.crossfader.fade.rampTo(targetFade, 30);
+
+                // Update State
+                this.activeCategory = nextCategory;
+                this.trackHistory.push(trackName);
+                if (this.trackHistory.length > 10) this.trackHistory.shift();
+
+                // Schedule the NEXT transition (staggered 3-5 mins)
+                const nextDuration = (180 + Math.random() * 120);
+                this.scheduleNextTransition(nextDuration);
+
+            } catch (e) {
+                // --- FAILURE (File doesn't exist yet) ---
+                // Silently retry immediately with a different random choice
+                // This creates the "just grab what there is" behavior
+                console.error(`[QuantumSound] Failed to load ${url}:`, e);
+                this.scheduleNextTransition(0, retryCount + 1);
+            }
+
+        }, delaySeconds * 1000);
+    }
+
+    pickRandomTrack(category) {
+        // Deprecated by the robust logic above, but kept if needed for utils
+        // We assume 1-8.
+        const trackNum = Math.floor(Math.random() * 8) + 1;
+        return `track_${trackNum.toString().padStart(2, '0')}.wav`;
     }
 
     toggle() {
@@ -98,37 +216,37 @@ export class QuantumSound {
 
     setMode(mode) {
         this.mode = mode;
-        if (this.enabled) this.updateMode();
+        this.updateMode();
     }
 
     updateMode() {
         if (!this.initialized || !this.enabled) return;
 
-        this.stopAll();
+        // In 'synthetic' mode, we might want to pause the loop players to save CPU
+        // But for 'smoothness', we might just mute them. 
+        // For now, we'll keep them running but muted if not in a valid mode, 
+        // OR we can stop them. Let's Stop them to be safe on CPU.
 
-        switch (this.mode) {
-            case 'atmospheric':
-                this.startAILoops();
-                break;
-            case 'synthetic':
-                // Quantum synth is triggered by update(qubits)
-                break;
-            case 'hybrid':
-                this.startAILoops();
-                break;
-            case 'interactive':
-                this.startMicProcessing();
-                break;
+        if (this.mode === 'synthetic') {
+            if (this.playerA) this.playerA.stop();
+            if (this.playerB) this.playerB.stop();
+        } else {
+            // Atmospheric, Hybrid, Interactive -> We want the bg loop
+            // If neither is playing, start the active one
+            if (this.playerA && this.playerB) {
+                if (this.playerA.state !== 'started' && this.playerB.state !== 'started') {
+                    // Kickstart the cycle
+                    this.scheduleNextTransition(0);
+                }
+            }
+        }
+
+        if (this.mode === 'interactive') {
+            this.startMicProcessing();
         }
     }
 
-    startAILoops() {
-        if (this.aiPlayers) {
-            // Randomly start 2 loops for texture
-            this.aiPlayers.player("void").start();
-            this.aiPlayers.player("glass").start();
-        }
-    }
+
 
     startMicProcessing(micSource) {
         if (!this.initialized || !micSource) return;
@@ -149,11 +267,12 @@ export class QuantumSound {
     }
 
     stopAll() {
-        if (this.aiPlayers) {
-            Object.values(this.aiPlayers._players).forEach(p => p.stop());
-        }
+        if (this.playerA) this.playerA.stop();
+        if (this.playerB) this.playerB.stop();
+
         if (this.quantumSynth) {
             this.quantumSynth.releaseAll();
+            this.activeNotes.clear();
         }
         if (this.micProcessor) {
             this.micProcessor.close();
@@ -174,18 +293,27 @@ export class QuantumSound {
             if (this.mode === 'synthetic' || this.mode === 'hybrid') {
                 const note = this.baseNotes[i];
 
-                // If coherent, we play the note
+                // If coherent, we ensure the note is playing
                 if (qubit.coherent) {
-                    const velocity = 0.2 + (prob1 * 0.3); // probability influences volume
-                    this.quantumSynth.triggerAttack(note, Tone.now(), velocity);
+                    // Only trigger attack if NOT already playing to avoid Polyphony Explosion
+                    if (!this.activeNotes.has(note)) {
+                        const velocity = 0.2 + (prob1 * 0.3);
+                        this.quantumSynth.triggerAttack(note, Tone.now(), velocity);
+                        this.activeNotes.add(note);
+                    }
 
-                    // Modulate parameters based on phase
+                    // Modulate parameters based on phase (continuous)
                     const modIndex = 5 + Math.abs(Math.sin(phase)) * 20;
                     this.quantumSynth.set({
                         modulationIndex: modIndex
                     });
+
                 } else {
-                    this.quantumSynth.triggerRelease(note);
+                    // If not coherent, ensure it stops
+                    if (this.activeNotes.has(note)) {
+                        this.quantumSynth.triggerRelease(note);
+                        this.activeNotes.delete(note);
+                    }
                 }
             } else if (this.mode === 'interactive' && this.micProcessor) {
                 // Modulate mic effects using all qubits (aggregated)
@@ -210,9 +338,9 @@ export class QuantumSound {
 
     setAIVolume(value) {
         this.aiVolumeValue = value / 100;
-        if (this.aiPlayers) {
-            this.aiPlayers.volume.rampTo(Tone.gainToDb(this.aiVolumeValue), 0.1);
-        }
+        const db = Tone.gainToDb(this.aiVolumeValue);
+        if (this.playerA) this.playerA.volume.rampTo(db, 0.1);
+        if (this.playerB) this.playerB.volume.rampTo(db, 0.1);
     }
 
     setQuantumVolume(value) {
@@ -241,7 +369,9 @@ export class QuantumSound {
             this.limiter.dispose();
             this.reverb.dispose();
             this.quantumSynth.dispose();
-            this.aiPlayers.dispose();
+            this.crossfader.dispose();
+            this.playerA.dispose();
+            this.playerB.dispose();
             this.initialized = false;
         }
     }

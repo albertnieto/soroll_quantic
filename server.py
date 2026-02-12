@@ -31,6 +31,27 @@ async def get_circuit(circuit: str = "bell_state"):
     return JSONResponse(content={"error": "Circuit not found"}, status_code=404)
 
 
+@app.get("/api/audio-manifest")
+async def get_audio_manifest():
+    audio_dir = "assets/audio/loops"
+    manifest = {}
+
+    if os.path.exists(audio_dir):
+        for category in os.listdir(audio_dir):
+            cat_path = os.path.join(audio_dir, category)
+            if os.path.isdir(cat_path):
+                # Filter for .wav files and exclude hidden files/dirs
+                tracks = [
+                    f
+                    for f in os.listdir(cat_path)
+                    if f.endswith(".wav") and not f.startswith(".")
+                ]
+                if tracks:
+                    manifest[category] = sorted(tracks)
+
+    return JSONResponse(content=manifest)
+
+
 @app.get("/circuits/{circuit_name}_diagram.png")
 async def get_circuit_diagram(circuit_name: str):
     diagram_path = f"circuits/{circuit_name}_diagram.png"
