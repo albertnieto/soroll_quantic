@@ -65,6 +65,18 @@
                 <div class="shader-toggle" style="margin-top:10px;">
                     <label><input type="checkbox" id="toggle-edge-mask" checked> Edge Masking</label>
                 </div>
+                <div id="edge-mask-controls">
+                    <div class="sound-control">
+                        <label>Mask Intensity</label>
+                        <input type="range" id="mask-intensity" min="0" max="100" value="100" step="1">
+                        <div class="value-display" id="maskIntensityValue">100%</div>
+                    </div>
+                    <div class="sound-control">
+                        <label>Mask Size</label>
+                        <input type="range" id="mask-size" min="0" max="600" value="200" step="5">
+                        <div class="value-display" id="maskSizeValue">200px</div>
+                    </div>
+                </div>
             </div>
         </div>
 

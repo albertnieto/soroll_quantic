@@ -586,10 +586,32 @@ document.getElementById('spacing').addEventListener('input', (e) => {
     updateQubitPositions();
 });
 
+function updateEdgeMask() {
+    const intensity = document.getElementById('mask-intensity').value / 100;
+    const size = document.getElementById('mask-size').value;
+    const overlay = document.getElementById('edge-mask-overlay');
+    // We use size as blur and half of size as spread for a soft natural vignette
+    overlay.style.boxShadow = `inset 0 0 ${size}px ${size / 2}px rgba(0, 0, 0, ${intensity})`;
+}
+
+document.getElementById('mask-intensity').addEventListener('input', (e) => {
+    document.getElementById('maskIntensityValue').textContent = e.target.value + '%';
+    updateEdgeMask();
+});
+
+document.getElementById('mask-size').addEventListener('input', (e) => {
+    document.getElementById('maskSizeValue').textContent = e.target.value + 'px';
+    updateEdgeMask();
+});
+
 document.getElementById('toggle-edge-mask').addEventListener('change', (e) => {
     const overlay = document.getElementById('edge-mask-overlay');
     overlay.classList.toggle('hidden', !e.target.checked);
+    document.getElementById('edge-mask-controls').style.display = e.target.checked ? 'block' : 'none';
 });
+
+// Initialize mask state
+updateEdgeMask();
 
 document.getElementById('toggle-sound').addEventListener('change', (e) => {
     const enabled = quantumSound.toggle();
@@ -657,10 +679,20 @@ document.getElementById('mic-device').addEventListener('change', async () => {
 
 
 let uiVisible = true;
-document.getElementById('toggle-ui').addEventListener('click', () => {
-    uiVisible = !uiVisible;
+function toggleUI(visible) {
+    uiVisible = visible !== undefined ? visible : !uiVisible;
     document.body.classList.toggle('ui-hidden', !uiVisible);
     document.getElementById('toggle-ui').textContent = uiVisible ? 'Hide UI' : 'Show UI';
+}
+
+document.getElementById('toggle-ui').addEventListener('click', () => {
+    toggleUI(false);
+});
+
+window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !uiVisible) {
+        toggleUI(true);
+    }
 });
 
 // Panel Toggle Logic

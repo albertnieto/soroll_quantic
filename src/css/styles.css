@@ -247,7 +247,8 @@ body.light-mode #background-overlay {
 }
 
 body.ui-hidden .ui-column,
-body.ui-hidden #info {
+body.ui-hidden #info,
+body.ui-hidden #view-controls {
     opacity: 0;
     pointer-events: none;
     transform: translateY(10px);
