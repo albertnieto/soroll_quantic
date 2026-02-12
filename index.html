@@ -109,10 +109,30 @@
                         style="width:100%;padding:8px;background:#004444;color:#00ffff;border:1px solid #00ffff;border-radius:5px;cursor:pointer;font-family:inherit;font-size:11px;">Start
                         Live Mic (Input)</button>
                 </div>
+                <div class="sound-control" style="margin-top:10px;">
+                    <label style="display:block;margin-bottom:5px;font-size:10px;">Sound Mode</label>
+                    <select id="sound-mode"
+                        style="width:100%;padding:5px;background:#002222;color:#00ffff;border:1px solid #00ffff;border-radius:5px;font-size:10px;margin-bottom:10px;">
+                        <option value="atmospheric">Atmospheric (AI Loops)</option>
+                        <option value="synthetic">Synthetic (Quantum Engine)</option>
+                        <option value="hybrid" selected>Hybrid (AI + Quantum)</option>
+                        <option value="interactive">Interactive (Mic Modulation)</option>
+                    </select>
+                </div>
                 <div class="sound-control">
                     <label>Master Volume</label>
                     <input type="range" id="sound-volume" min="0" max="100" value="30" step="1">
                     <div class="value-display" id="volume-value">30%</div>
+                </div>
+                <div class="sound-control">
+                    <label>AI Loops Volume</label>
+                    <input type="range" id="ai-volume" min="0" max="100" value="50" step="1">
+                    <div class="value-display" id="ai-volume-value">50%</div>
+                </div>
+                <div class="sound-control">
+                    <label>Quantum Volume</label>
+                    <input type="range" id="quantum-volume" min="0" max="100" value="50" step="1">
+                    <div class="value-display" id="quantum-volume-value">50%</div>
                 </div>
                 <div class="sound-control">
                     <label>Bass Depth</label>
@@ -199,6 +219,7 @@
     <div id="edge-mask-overlay"></div>
     <div id="background-overlay"></div>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
     <script type="importmap">
     {
         "imports": {

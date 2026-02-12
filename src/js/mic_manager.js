@@ -8,6 +8,7 @@ export class MicManager {
         this.dataArray = null;
         this.energy = 0;
         this.enabled = false;
+        this.source = null;
     }
 
     async getDevices() {
@@ -50,6 +51,7 @@ export class MicManager {
             this.analyser.smoothingTimeConstant = 0.5;
             this.dataArray = new Uint8Array(this.analyser.frequencyBinCount);
 
+            this.source = source;
             source.connect(this.analyser);
 
             this.enabled = true;
@@ -80,6 +82,10 @@ export class MicManager {
 
     getEnergy() {
         return this.energy;
+    }
+
+    getSource() {
+        return this.source;
     }
 
     stop() {

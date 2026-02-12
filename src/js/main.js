@@ -653,19 +653,35 @@ document.getElementById('toggle-sound').addEventListener('change', (e) => {
 document.getElementById('sound-volume').addEventListener('input', (e) => {
     const value = e.target.value;
     document.getElementById('volume-value').textContent = value + '%';
-    quantumSound.setVolume(value / 100);
+    quantumSound.setMasterVolume(value);
+});
+
+document.getElementById('ai-volume').addEventListener('input', (e) => {
+    const value = e.target.value;
+    document.getElementById('ai-volume-value').textContent = value + '%';
+    quantumSound.setAIVolume(value);
+});
+
+document.getElementById('quantum-volume').addEventListener('input', (e) => {
+    const value = e.target.value;
+    document.getElementById('quantum-volume-value').textContent = value + '%';
+    quantumSound.setQuantumVolume(value);
 });
 
 document.getElementById('sound-bass').addEventListener('input', (e) => {
     const value = e.target.value;
     document.getElementById('bass-value').textContent = value + '%';
-    quantumSound.setBassDepth(value / 100);
+    quantumSound.setBassDepth(value);
 });
 
 document.getElementById('sound-resonance').addEventListener('input', (e) => {
     const value = e.target.value;
     document.getElementById('resonance-value').textContent = value + '%';
-    quantumSound.setResonance(value / 100);
+    quantumSound.setResonance(value);
+});
+
+document.getElementById('sound-mode').addEventListener('change', (e) => {
+    quantumSound.setMode(e.target.value);
 });
 
 async function refreshMicList() {
@@ -698,6 +714,10 @@ async function startMic() {
     const btn = document.getElementById('start-mic');
     btn.textContent = micManager.enabled ? 'Live Mic Active' : 'Retry Mic';
     btn.style.background = micManager.enabled ? '#007777' : '#440000';
+
+    if (micManager.enabled && quantumSound.mode === 'interactive') {
+        quantumSound.startMicProcessing(micManager.getSource());
+    }
 }
 
 document.getElementById('start-mic').addEventListener('click', startMic);
