@@ -1,60 +1,57 @@
-# Lluc Llum - Quantum Qubit Visualization
+# Lluc Llum - Quantum Visualization & Laboratory
 
-A WebGL-based quantum circuit visualization using Three.js with custom GLSL shaders and PennyLane integration.
+A multi-layered quantum qubit visualization and algorithmic laboratory. This project combines PennyLane's quantum simulation with high-performance WebGL shaders to create a premium, interactive experience of quantum physics.
 
-## Features
+## 🌟 Features
 
-- 4 interactive qubits with quantum state evolution
-- Entanglement visualization with orbital shaders
-- Quantum-based shaders using wave functions and probability amplitudes
-- PennyLane circuit integration with gate-by-gate execution
-- Real-time state monitoring and circuit diagram
-- Mic threshold controls for qubit collapse simulation
+- **Core Quantum Engine**: 4-qubit system with real-time probability evolution and entanglement visualization.
+- **Microphone Interaction**: Use 4-channel audio input to trigger qubit decoherence (collapse) and ripple effects.
+- **Advanced Shaders**: 
+  - **Black Hole**: Gravitational lensing, Einstein rings, and accretion discs driven by quantum state.
+  - **Quantum Clouds**: Multi-particle point systems visualizing wave function density.
+  - **Mic Ripples**: Real-time energy propagation through the quantum field.
+- **PennyLane Integration**: Real-world quantum algorithms (Bell State, Phase Evolution, Quantum Chaos) executed gate-by-gate.
+- **Laboratory Experiments**: Separate tools for 3D STL exporting, studio viewing, and scroll-based interactive storytelling.
 
-## Setup
+## 🚀 Getting Started
 
-### Install Python Dependencies
+### 1. Install Dependencies
 ```bash
-pip3 install -r requirements.txt
+pip install -r requirements.txt
 ```
 
-### Run Server
+### 2. Launch the Application
+Use the robust start script (recommended):
 ```bash
-python3 server.py
+./start.sh
+```
+Or run the dev mode:
+```bash
+./start.sh --dev
 ```
 
-Then open http://localhost:8000
+Then open **[http://localhost:8050](http://localhost:8050)** in your browser.
 
-## Usage
+## 🔬 The Laboratory (`/labs`)
 
-1. **Auto Execute** - Automatically runs circuit gates in sequence
-2. **Next Gate** - Execute next gate manually
-3. **Reset Circuit** - Reset all qubits to |0⟩ state
-4. **Mic Controls** - Simulate measurement (collapse when > 0.7)
-5. **Qubit Spacing** - Adjust distance between qubits (default 8.5)
+This repository includes several experimental components located in the `/labs` directory:
 
-## Circuit
+- **[Ripple Studio](/labs/ripple_studio.html)**: Design and export custom 3D ripple geometries as STL files for 3D printing.
+- **[Open Studio](/labs/open_studio.html)**: A premium holographic workspace for inspecting STL models.
+- **[Quantum Scroll](/labs/quantum_scroll.html)**: An interactive portfolio demonstration showing smooth sphere settling and UI transitions.
+- **[Quantum Scene](/labs/quantum-scene.html)**: A standalone 4-qubit scene with dedicated mic threshold simulations.
 
-The Bell state circuit creates entanglement between qubit pairs:
-- H → Q0 (Hadamard on qubit 0)
-- CNOT → Q0,Q1 (Entangle qubits 0 and 1)
-- H → Q2 (Hadamard on qubit 2)
-- CNOT → Q2,Q3 (Entangle qubits 2 and 3)
-- RY(0.5) → Q0 (Rotation on qubit 0)
-- RY(0.5) → Q2 (Rotation on qubit 2)
+## 🛠 Project Structure
 
-## Shaders
+- `server.py`: FastAPI backend with PennyLane engine.
+- `src/js/main.js`: Main visualization and Three.js orchestration.
+- `src/js/black_hole_shader.js`: Complex GLSL code for astrophysical effects.
+- `circuits/`: Python definitions for quantum circuits and diagram generators.
+- `labs/`: Experimental tools and standalone visualizations.
+- `shader/`: Raw GLSL assets.
 
-- **Quantum Shader**: Wave functions, probability amplitudes, interference
-- **Orbital Shader**: Entanglement visualization with portal effects
-- **Plasma Shader**: Background texture with noise-based patterns
+## 📖 Deployment
+For long-running installations or production environments, please refer to the **[PRODUCTION_GUIDE.md](PRODUCTION_GUIDE.md)** for Kiosk mode settings and macOS optimization.
 
-## Files
-
-- `server.py` - Python server with PennyLane integration
-- `circuits/bell_state.py` - Circuit definition and execution
-- `circuits/plot_circuit.py` - Circuit diagram generation
-- `src/js/main.js` - Main visualization logic
-- `src/js/quantum_circuit.js` - Circuit management
-- `src/js/Qubit.js` - Qubit state class
-- `src/js/shaders.js` - GLSL shader definitions
+---
+*Created with focus on Computational Aesthetics and Quantum Engineering.*
