@@ -240,7 +240,54 @@ window.micTargetIndex = 0;
 window.lastMicTargetTime = 0;
 
 let autoExecute = false;
-let autoExecuteInterval = null;
+let autoStepDelay = 1000;
+let autoLoop = true;
+let autoExecuteTimeout = null;
+
+const autoSpeedSlider = document.getElementById('auto-speed');
+autoSpeedSlider.addEventListener('input', (e) => {
+    autoStepDelay = parseInt(e.target.value);
+    document.getElementById('speed-value').textContent = (autoStepDelay / 1000).toFixed(1) + 's';
+});
+
+document.getElementById('toggle-loop').addEventListener('change', (e) => {
+    autoLoop = e.target.checked;
+});
+
+function runAutoStep() {
+    if (!autoExecute) return;
+
+    const hasMore = executeNextGate();
+
+    if (hasMore) {
+        autoExecuteTimeout = setTimeout(runAutoStep, autoStepDelay);
+    } else {
+        if (autoLoop) {
+            // Wait one extra beat before restarting
+            autoExecuteTimeout = setTimeout(() => {
+                if (autoExecute) {
+                    executeNextGate(); // First gate of new cycle
+                    autoExecuteTimeout = setTimeout(runAutoStep, autoStepDelay);
+                }
+            }, autoStepDelay);
+        } else {
+            autoExecute = false;
+            document.getElementById('auto-execute').textContent = 'Auto Execute';
+        }
+    }
+}
+
+document.getElementById('auto-execute').addEventListener('click', () => {
+    autoExecute = !autoExecute;
+    document.getElementById('auto-execute').textContent = autoExecute ? 'Stop Auto' : 'Auto Execute';
+
+    if (autoExecute) {
+        runAutoStep();
+    } else {
+        clearTimeout(autoExecuteTimeout);
+    }
+});
+
 let currentMode = 'manual';
 
 const circuitModeSelect = document.getElementById('circuit-mode');
@@ -496,21 +543,6 @@ document.getElementById('reset-circuit').addEventListener('click', () => {
         qubit.coherent = true;
     });
     updateQuantumStateDisplay();
-});
-
-document.getElementById('auto-execute').addEventListener('click', () => {
-    autoExecute = !autoExecute;
-    document.getElementById('auto-execute').textContent = autoExecute ? 'Stop Auto' : 'Auto Execute';
-
-    if (autoExecute) {
-        autoExecuteInterval = setInterval(() => {
-            if (!executeNextGate()) {
-                setTimeout(() => executeNextGate(), 1000);
-            }
-        }, 1500);
-    } else {
-        clearInterval(autoExecuteInterval);
-    }
 });
 
 document.getElementById('reset').addEventListener('click', () => {

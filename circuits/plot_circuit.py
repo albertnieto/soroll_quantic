@@ -56,10 +56,28 @@ def random_rotation_circuit():
     return qml.state()
 
 
+@qml.qnode(dev)
+def quantum_chaos_circuit():
+    # Layer 1
+    for i in range(4):
+        qml.Hadamard(wires=i)
+    # Just show a few representative layers for the diagram to keep it readable
+    for layer in range(2):
+        for i in range(4):
+            qml.RX(0.1, wires=i)
+            qml.RY(0.2, wires=i)
+            qml.RZ(0.3, wires=i)
+        for i in range(3):
+            qml.CNOT(wires=[i, i + 1])
+        qml.CNOT(wires=[3, 0])
+    return qml.state()
+
+
 circuits = {
     "bell_state": bell_state_circuit,
     "phase_evolution": phase_evolution_circuit,
     "random_rotation": random_rotation_circuit,
+    "quantum_chaos": quantum_chaos_circuit,
 }
 
 for name, circuit_fn in circuits.items():

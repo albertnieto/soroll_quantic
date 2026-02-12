@@ -142,6 +142,7 @@
                     <option value="bell_state">Bell State</option>
                     <option value="phase_evolution">Phase Evolution</option>
                     <option value="random_rotation">Random Rotation</option>
+                    <option value="quantum_chaos">Quantum Chaos</option>
                 </select>
 
                 <div id="manual-controls" style="display:none;">
@@ -155,6 +156,17 @@
                         <div id="circuit-progress-bar"></div>
                     </div>
                     <div id="current-gate">No gate executed</div>
+
+                    <div class="sound-control" style="margin: 10px 0;">
+                        <label>Step Delay</label>
+                        <input type="range" id="auto-speed" min="100" max="3000" value="1000" step="100">
+                        <div class="value-display" id="speed-value">1.0s</div>
+                    </div>
+
+                    <div class="shader-toggle" style="margin-bottom: 10px;">
+                        <label><input type="checkbox" id="toggle-loop" checked> Loop Circuit</label>
+                    </div>
+
                     <button id="next-gate">Next Gate</button>
                     <button id="reset-circuit">Reset Circuit</button>
                     <button id="auto-execute">Auto Execute</button>

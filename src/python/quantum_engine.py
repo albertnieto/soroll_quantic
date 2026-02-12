@@ -1,5 +1,4 @@
 import pennylane as qml
-import numpy as np
 
 
 class QuantumEngine:
@@ -51,6 +50,8 @@ class QuantumEngine:
         }
 
     def get_random_rotation(self):
+        import numpy as np
+
         @qml.qnode(self.dev)
         def circuit():
             for i in range(self.num_qubits):
@@ -67,7 +68,69 @@ class QuantumEngine:
                     "params": [float(np.random.random() * np.pi)],
                 }
                 for i in range(4)
+            ]
+            + [
+                {
+                    "type": "RY",
+                    "wires": [i],
+                    "params": [float(np.random.random() * np.pi)],
+                }
+                for i in range(4)
             ],
+            "state_vector": [[float(s.real), float(s.imag)] for s in state],
+            "num_qubits": self.num_qubits,
+        }
+
+    def get_quantum_chaos(self):
+        # A circuit designed to evolve a lot and show complex behavior
+        gates = []
+
+        # Layer 1: Initial Superposition
+        for i in range(self.num_qubits):
+            gates.append({"type": "H", "wires": [i], "params": []})
+
+        # Multiple Layers of Evolution
+        num_layers = 4
+        for layer in range(num_layers):
+            # Rotations for color evolution (phase and amplitude)
+            for i in range(self.num_qubits):
+                # Pseudo-random but deterministic for this call
+                angle_x = (layer + 1) * 0.4 + i * 0.2
+                angle_y = (layer + 1) * 0.3 + i * 0.5
+                angle_z = (layer + 1) * 0.7 + i * 0.3
+
+                gates.append({"type": "RX", "wires": [i], "params": [angle_x]})
+                gates.append({"type": "RY", "wires": [i], "params": [angle_y]})
+                gates.append({"type": "RZ", "wires": [i], "params": [angle_z]})
+
+            # Entanglement web
+            for i in range(self.num_qubits - 1):
+                gates.append({"type": "CNOT", "wires": [i, i + 1], "params": []})
+
+            # Cross-entanglement
+            gates.append(
+                {"type": "CNOT", "wires": [self.num_qubits - 1, 0], "params": []}
+            )
+
+        @qml.qnode(self.dev)
+        def circuit():
+            # Apply gates to pennylane circuit for state vector calculation
+            for g in gates:
+                if g["type"] == "H":
+                    qml.Hadamard(wires=g["wires"][0])
+                elif g["type"] == "CNOT":
+                    qml.CNOT(wires=g["wires"])
+                elif g["type"] == "RX":
+                    qml.RX(g["params"][0], wires=g["wires"][0])
+                elif g["type"] == "RY":
+                    qml.RY(g["params"][0], wires=g["wires"][0])
+                elif g["type"] == "RZ":
+                    qml.RZ(g["params"][0], wires=g["wires"][0])
+            return qml.state()
+
+        state = circuit()
+        return {
+            "gates": gates,
             "state_vector": [[float(s.real), float(s.imag)] for s in state],
             "num_qubits": self.num_qubits,
         }

@@ -11,6 +11,7 @@ app = FastAPI()
 CIRCUIT_MAP = {
     "phase_evolution": engine.get_phase_evolution,
     "random_rotation": engine.get_random_rotation,
+    "quantum_chaos": engine.get_quantum_chaos,
 }
 
 

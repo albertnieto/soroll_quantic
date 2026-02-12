@@ -25,6 +25,28 @@ export class QuantumCircuit {
             return data;
         } catch (error) {
             console.warn('Using fallback circuit (Python server not running)');
+            if (circuitName === 'quantum_chaos') {
+                this.gates = [
+                    { "type": "INIT", "wires": [0, 1, 2, 3], "params": [] },
+                    { "type": "H", "wires": [0], "params": [] },
+                    { "type": "H", "wires": [1], "params": [] },
+                    { "type": "H", "wires": [2], "params": [] },
+                    { "type": "H", "wires": [3], "params": [] }
+                ];
+                // Add a few chaotic layers for fallback
+                for (let l = 0; l < 3; l++) {
+                    for (let i = 0; i < 4; i++) {
+                        this.gates.push({ "type": "RX", "wires": [i], "params": [0.4 + l * 0.1] });
+                        this.gates.push({ "type": "RY", "wires": [i], "params": [0.5 + i * 0.2] });
+                        this.gates.push({ "type": "RZ", "wires": [i], "params": [0.3 + l * 0.5] });
+                    }
+                    this.gates.push({ "type": "CNOT", "wires": [0, 1], "params": [] });
+                    this.gates.push({ "type": "CNOT", "wires": [1, 2], "params": [] });
+                    this.gates.push({ "type": "CNOT", "wires": [2, 3], "params": [] });
+                    this.gates.push({ "type": "CNOT", "wires": [3, 0], "params": [] });
+                }
+                return { gates: this.gates, num_qubits: 4 };
+            }
             if (circuitName === 'random_rotation') {
                 this.gates = [
                     { "type": "INIT", "wires": [0, 1, 2, 3], "params": [] },
