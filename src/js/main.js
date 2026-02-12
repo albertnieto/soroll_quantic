@@ -247,7 +247,10 @@ const circuitModeSelect = document.getElementById('circuit-mode');
 circuitModeSelect.addEventListener('change', (e) => {
     currentMode = e.target.value;
 
-    if (currentMode === 'manual') {
+    if (currentMode === '') {
+        document.getElementById('manual-controls').style.display = 'none';
+        document.getElementById('circuit-mode-controls').style.display = 'none';
+    } else if (currentMode === 'manual') {
         document.getElementById('manual-controls').style.display = 'block';
         document.getElementById('circuit-mode-controls').style.display = 'none';
     } else {
@@ -258,7 +261,7 @@ circuitModeSelect.addEventListener('change', (e) => {
         quantumCircuit.loadCircuit(currentMode).then(() => {
             const img = document.getElementById('circuit-diagram-img');
             if (img) {
-                img.src = '/circuits/circuit_diagram.png?t=' + Date.now();
+                img.src = `/circuits/${currentMode}_diagram.png?t=` + Date.now();
                 img.style.display = 'block';
                 img.onerror = () => {
                     img.style.display = 'none';
@@ -531,7 +534,7 @@ let shadersEnabled = {
     qubit: true,
     clouds: false, // New mode
     orbital: true,
-    entanglement: false,
+    entanglement: true,
     accretion: false, // Default false
     lensing: true,
     einstein: false, // Default false
@@ -581,6 +584,11 @@ document.getElementById('spacing').addEventListener('input', (e) => {
     qubitSpacing = parseFloat(e.target.value);
     document.getElementById('spacingValue').textContent = qubitSpacing.toFixed(1);
     updateQubitPositions();
+});
+
+document.getElementById('toggle-edge-mask').addEventListener('change', (e) => {
+    const overlay = document.getElementById('edge-mask-overlay');
+    overlay.classList.toggle('hidden', !e.target.checked);
 });
 
 document.getElementById('toggle-sound').addEventListener('change', (e) => {

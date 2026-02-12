@@ -30,15 +30,23 @@ async def get_circuit(circuit: str = "bell_state"):
     return JSONResponse(content={"error": "Circuit not found"}, status_code=404)
 
 
-@app.get("/circuits/circuit_diagram.png")
-async def get_circuit_diagram():
-    diagram_path = "circuits/circuit_diagram.png"
+@app.get("/circuits/{circuit_name}_diagram.png")
+async def get_circuit_diagram(circuit_name: str):
+    diagram_path = f"circuits/{circuit_name}_diagram.png"
     if not os.path.exists(diagram_path):
         import subprocess
 
-        # Generate it once if missing
+        # Generate all diagrams if missing
         subprocess.run(["python3", "circuits/plot_circuit.py"])
 
+    if os.path.exists(diagram_path):
+        return FileResponse(diagram_path)
+    return JSONResponse(content={"error": "Diagram not found"}, status_code=404)
+
+
+@app.get("/circuits/circuit_diagram.png")
+async def get_legacy_circuit_diagram():
+    diagram_path = "circuits/circuit_diagram.png"
     if os.path.exists(diagram_path):
         return FileResponse(diagram_path)
     return JSONResponse(content={"error": "Diagram not found"}, status_code=404)

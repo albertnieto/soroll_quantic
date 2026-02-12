@@ -12,7 +12,7 @@
     <div id="canvas"></div>
 
     <div class="ui-column left">
-        <div id="shader-controls" class="ui-panel">
+        <div id="shader-controls" class="ui-panel collapsed">
             <div class="panel-header">
                 <h2>Shader Controls</h2>
                 <span class="toggle-icon">▼</span>
@@ -34,7 +34,7 @@
                     <label><input type="checkbox" id="toggle-orbital" checked> Particle System</label>
                 </div>
                 <div class="shader-toggle">
-                    <label><input type="checkbox" id="toggle-entanglement"> Mic Ripples</label>
+                    <label><input type="checkbox" id="toggle-entanglement" checked> Mic Ripples</label>
                 </div>
                 <div class="shader-toggle">
                     <label><input type="checkbox" id="toggle-accretion"> Accretion Disc</label>
@@ -53,16 +53,22 @@
 
         <div id="spacing-controls" class="ui-panel">
             <div class="panel-header">
-                <h2>Qubit Spacing</h2>
+                <h2>Configuration</h2>
                 <span class="toggle-icon">▼</span>
             </div>
             <div class="panel-content">
-                <input type="range" id="spacing" min="3" max="10" value="8.5" step="0.5">
-                <div class="value-display" id="spacingValue">8.5</div>
+                <div class="sound-control">
+                    <label>Qubit Spacing</label>
+                    <input type="range" id="spacing" min="3" max="10" value="8.5" step="0.5">
+                    <div class="value-display" id="spacingValue">8.5</div>
+                </div>
+                <div class="shader-toggle" style="margin-top:10px;">
+                    <label><input type="checkbox" id="toggle-edge-mask" checked> Edge Masking</label>
+                </div>
             </div>
         </div>
 
-        <div id="quantum-state" class="ui-panel">
+        <div id="quantum-state" class="ui-panel collapsed">
             <div class="panel-header">
                 <h2>Quantum State</h2>
                 <span class="toggle-icon">▼</span>
@@ -119,19 +125,20 @@
             <div class="panel-content">
                 <select id="circuit-mode"
                     style="width:100%;padding:6px;margin:10px 0;background:#002222;color:#00ffff;border:1px solid #00ffff;border-radius:5px;font-size:11px;">
+                    <option value="" selected>Select Circuit...</option>
                     <option value="manual">Manual Control</option>
                     <option value="bell_state">Bell State</option>
                     <option value="phase_evolution">Phase Evolution</option>
                     <option value="random_rotation">Random Rotation</option>
                 </select>
 
-                <div id="manual-controls" style="display:block;">
+                <div id="manual-controls" style="display:none;">
                     <div id="manual-qubits"></div>
                 </div>
 
                 <div id="circuit-mode-controls" style="display:none;">
                     <img id="circuit-diagram-img" src="" alt="Circuit"
-                        style="display:none;width:100%;border-radius:5px;background:white;padding:5px;margin-bottom:10px;">
+                        style="display:none;max-width:160px;width:auto;border-radius:5px;background:white;padding:5px;margin-bottom:10px;">
                     <div id="circuit-progress">
                         <div id="circuit-progress-bar"></div>
                     </div>
@@ -165,6 +172,7 @@
         <button id="toggle-theme">Light Mode</button>
     </div>
 
+    <div id="edge-mask-overlay"></div>
     <div id="background-overlay"></div>
 
     <script type="importmap">
