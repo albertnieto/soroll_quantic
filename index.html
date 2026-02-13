@@ -12,45 +12,6 @@
     <div id="canvas"></div>
 
     <div class="ui-column left">
-        <div id="shader-controls" class="ui-panel collapsed">
-            <div class="panel-header">
-                <h2>Shader Controls</h2>
-                <span class="toggle-icon">▼</span>
-            </div>
-            <div class="panel-content">
-                <div class="shader-toggle">
-                    <label><input type="checkbox" id="toggle-plasma" checked> Plasma Shader</label>
-                </div>
-                <div class="shader-toggle">
-                    <label><input type="checkbox" id="toggle-qubit" checked> Qubit Shader</label>
-                </div>
-                <div class="shader-toggle">
-                    <label><input type="checkbox" id="toggle-clouds"> Quantum Clouds</label>
-                </div>
-                <div class="shader-toggle">
-                    <label><input type="checkbox" id="toggle-seamless"> Seamless Mode (3D)</label>
-                </div>
-                <div class="shader-toggle">
-                    <label><input type="checkbox" id="toggle-orbital" checked> Particle System</label>
-                </div>
-                <div class="shader-toggle">
-                    <label><input type="checkbox" id="toggle-entanglement" checked> Mic Ripples</label>
-                </div>
-                <div class="shader-toggle">
-                    <label><input type="checkbox" id="toggle-accretion"> Accretion Disc</label>
-                </div>
-                <div class="shader-toggle">
-                    <label><input type="checkbox" id="toggle-lensing" checked> Gravitational Lensing</label>
-                </div>
-                <div class="shader-toggle">
-                    <label><input type="checkbox" id="toggle-bloom" checked> Bloom</label>
-                </div>
-                <div class="shader-toggle">
-                    <label><input type="checkbox" id="toggle-einstein"> Einstein Rings</label>
-                </div>
-            </div>
-        </div>
-
         <div id="spacing-controls" class="ui-panel">
             <div class="panel-header">
                 <h2>Configuration</h2>
@@ -77,16 +38,6 @@
                         <div class="value-display" id="maskSizeValue">200px</div>
                     </div>
                 </div>
-            </div>
-        </div>
-
-        <div id="quantum-state" class="ui-panel collapsed">
-            <div class="panel-header">
-                <h2>Quantum State</h2>
-                <span class="toggle-icon">▼</span>
-            </div>
-            <div class="panel-content">
-                <div id="qubit-states"></div>
             </div>
         </div>
 
@@ -147,10 +98,22 @@
                 <div class="sound-control" style="margin-top:15px; border-top: 1px solid #004444; padding-top: 15px;">
                     <label style="display:block;margin-bottom:5px;font-size:10px;color:#00ffff;">Acoustic Tuning
                         (AEC)</label>
-                    <button id="run-calibration"
-                        style="width:100%;padding:8px;background:#444400;color:#ffff00;border:1px solid #ffff00;border-radius:5px;cursor:pointer;font-family:inherit;font-size:11px;margin-bottom:10px;">
-                        Calibrate Room Fingerprint
-                    </button>
+                    <div style="margin-bottom:10px;">
+                        <input type="text" id="calibration-name-input" placeholder="Room Name (e.g. Studio A)"
+                            style="width:100%;padding:5px;margin-bottom:5px;background:#002222;color:#00ffff;border:1px solid #00ffff;border-radius:5px;font-size:10px;">
+                        <div style="display:flex; gap:5px;">
+                            <button id="btn-calibration-record"
+                                style="flex:1;padding:5px;background:#440000;color:#ffaaaa;border:1px solid #ff4444;border-radius:5px;cursor:pointer;font-size:10px;">Record
+                                Sweep</button>
+                            <button id="btn-calibration-stop"
+                                style="flex:1;padding:5px;background:#444444;color:#aaaaaa;border:1px solid #888888;border-radius:5px;cursor:pointer;font-size:10px;">Stop</button>
+                        </div>
+                        <button id="btn-calibration-save" disabled
+                            style="width:100%;margin-top:5px;padding:5px;background:#004400;color:#aaffaa;border:1px solid #00ff00;border-radius:5px;cursor:pointer;font-size:10px;opacity:0.5;">Save
+                            Profile</button>
+                        <div id="calibration-status-text"
+                            style="color:yellow;font-size:9px;margin-top:2px;text-align:center;min-height:12px;"></div>
+                    </div>
                     <div style="display:flex; gap: 5px; align-items: center;">
                         <select id="calibration-profile"
                             style="flex-grow:1;padding:5px;background:#002222;color:#00ffff;border:1px solid #00ffff;border-radius:5px;font-size:10px;">
@@ -163,6 +126,55 @@
     </div>
 
     <div class="ui-column right">
+        <div id="shader-controls" class="ui-panel collapsed">
+            <div class="panel-header">
+                <h2>Shader Controls</h2>
+                <span class="toggle-icon">▼</span>
+            </div>
+            <div class="panel-content">
+                <div class="shader-toggle">
+                    <label><input type="checkbox" id="toggle-plasma" checked> Plasma Shader</label>
+                </div>
+                <div class="shader-toggle">
+                    <label><input type="checkbox" id="toggle-qubit" checked> Qubit Shader</label>
+                </div>
+                <div class="shader-toggle">
+                    <label><input type="checkbox" id="toggle-clouds"> Quantum Clouds</label>
+                </div>
+                <div class="shader-toggle">
+                    <label><input type="checkbox" id="toggle-seamless"> Seamless Mode (3D)</label>
+                </div>
+                <div class="shader-toggle">
+                    <label><input type="checkbox" id="toggle-orbital" checked> Particle System</label>
+                </div>
+                <div class="shader-toggle">
+                    <label><input type="checkbox" id="toggle-entanglement" checked> Mic Ripples</label>
+                </div>
+                <div class="shader-toggle">
+                    <label><input type="checkbox" id="toggle-accretion"> Accretion Disc</label>
+                </div>
+                <div class="shader-toggle">
+                    <label><input type="checkbox" id="toggle-lensing" checked> Gravitational Lensing</label>
+                </div>
+                <div class="shader-toggle">
+                    <label><input type="checkbox" id="toggle-bloom" checked> Bloom</label>
+                </div>
+                <div class="shader-toggle">
+                    <label><input type="checkbox" id="toggle-einstein"> Einstein Rings</label>
+                </div>
+            </div>
+        </div>
+
+        <div id="quantum-state" class="ui-panel collapsed">
+            <div class="panel-header">
+                <h2>Quantum State</h2>
+                <span class="toggle-icon">▼</span>
+            </div>
+            <div class="panel-content">
+                <div id="qubit-states"></div>
+            </div>
+        </div>
+
         <div id="circuit-panel" class="ui-panel">
             <div class="panel-header">
                 <h2>Circuit Control</h2>
@@ -208,7 +220,7 @@
             </div>
         </div>
 
-        <div id="controls" class="ui-panel">
+        <div id="controls" class="ui-panel collapsed">
             <div class="panel-header">
                 <h2>Mic Controls</h2>
                 <span class="toggle-icon">▼</span>
@@ -218,6 +230,7 @@
                 <button id="reset">Reset</button>
             </div>
         </div>
+
     </div>
 
     <div id="info">
@@ -233,12 +246,13 @@
     <div id="edge-mask-overlay"></div>
     <div id="background-overlay"></div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <!-- Tone.js will be loaded dynamically -->
     <script type="importmap">
     {
         "imports": {
             "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+            "tone": "https://esm.sh/tone@14.8.49"
         }
     }
     </script>

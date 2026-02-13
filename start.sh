@@ -40,7 +40,7 @@ start_server() {
     if [[ "$MODE" == "production" ]]; then
         # Production: Auto-restart on crash
         while true; do
-            ./.venv/bin/python3 server.py >> server.log 2>&1
+            ./.venv/bin/python3 server.py
             EXIT_CODE=$?
             echo "⚠️ Server crashed with exit code $EXIT_CODE. Restarting in 2 seconds..."
             sleep 2

@@ -649,8 +649,8 @@ document.getElementById('toggle-edge-mask').addEventListener('change', (e) => {
 // Initialize mask state
 updateEdgeMask();
 
-document.getElementById('toggle-sound').addEventListener('change', (e) => {
-    const enabled = quantumSound.toggle();
+document.getElementById('toggle-sound').addEventListener('change', async (e) => {
+    const enabled = await quantumSound.toggle();
     e.target.checked = enabled;
 });
 
@@ -705,25 +705,93 @@ async function refreshCalibrationProfiles() {
     if (currentValue) select.value = currentValue;
 }
 
-document.getElementById('run-calibration').addEventListener('click', async () => {
-    const btn = document.getElementById('run-calibration');
-    const originalText = btn.textContent;
-    btn.disabled = true;
-    btn.textContent = "CALIBRATING... (EMPTY ROOM PLEASE)";
-    btn.style.background = "#440000";
+// Safe Log to status without spamming
+function safeLog(message) {
+    const status = document.getElementById('calibration-status-text');
+    if (status && status.textContent !== message) {
+        status.textContent = message;
+        console.log("[UI Log] " + message);
+    }
+}
+
+let currentCalibrationMask = null;
+
+document.getElementById('btn-calibration-record').addEventListener('click', async () => {
+    const status = document.getElementById('calibration-status-text');
+    const btnRec = document.getElementById('btn-calibration-record');
+    const btnSave = document.getElementById('btn-calibration-save');
+
+    // Reset state
+    currentCalibrationMask = null;
+    btnSave.disabled = true;
+    btnSave.style.opacity = "0.5";
+
+    safeLog("CALIBRATING... PLEASE BE SILENT");
+    btnRec.disabled = true;
+    btnRec.textContent = "Running...";
+    btnRec.style.background = "#220000";
 
     try {
-        const mask = await quantumSound.runCalibrationSweep(micManager);
-        const name = prompt("Enter a name for this room calibration:", "Default_Room");
-        if (name) {
-            await quantumSound.saveCalibration(name, mask);
-            await refreshCalibrationProfiles();
-            document.getElementById('calibration-profile').value = name;
+        const result = await quantumSound.runCalibrationSweep(micManager);
+
+        // Handle Error Objects
+        if (result && result.error) {
+            safeLog(result.error);
+            currentCalibrationMask = null;
+        } else if (result) { // Success (returns mask array)
+            currentCalibrationMask = result;
+            safeLog("Sweep Complete. Enter Name & Save.");
+            btnSave.disabled = false;
+            btnSave.style.opacity = "1";
+        } else {
+            safeLog("Calibration Cancelled (Unknown Error).");
         }
+    } catch (e) {
+        console.error(e);
+        safeLog("Error: " + e.message);
     } finally {
-        btn.disabled = false;
-        btn.textContent = originalText;
-        btn.style.background = "#444400";
+        btnRec.disabled = false;
+        btnRec.textContent = "Record Sweep";
+        btnRec.style.background = "#440000";
+    }
+});
+
+document.getElementById('btn-calibration-stop').addEventListener('click', () => {
+    if (quantumSound.isCalibrating) {
+        quantumSound.stopCalibrationSweep();
+        document.getElementById('calibration-status-text').textContent = "Stopping...";
+    }
+});
+
+document.getElementById('btn-calibration-save').addEventListener('click', async () => {
+    const nameInput = document.getElementById('calibration-name-input');
+    const status = document.getElementById('calibration-status-text');
+    const name = nameInput.value.trim();
+
+    if (!name) {
+        status.textContent = "Error: Please enter a name first.";
+        // Highlight input
+        nameInput.style.borderColor = "red";
+        setTimeout(() => nameInput.style.borderColor = "#00ffff", 2000);
+        return;
+    }
+
+    if (!currentCalibrationMask) {
+        status.textContent = "Error: No calibration data.";
+        return;
+    }
+
+    status.textContent = "Saving...";
+    const success = await quantumSound.saveCalibration(name, currentCalibrationMask);
+
+    if (success) {
+        status.textContent = "Saved: " + name;
+        await refreshCalibrationProfiles();
+        document.getElementById('calibration-profile').value = name;
+        // Auto-load the saved profile
+        await quantumSound.loadCalibration(name, micManager);
+    } else {
+        status.textContent = "Save Failed (Server Error).";
     }
 });
 

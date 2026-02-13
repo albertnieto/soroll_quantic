@@ -73,10 +73,18 @@ export class MicManager {
 
     stopCalibration() {
         this.calibrationMode = false;
-        this.calibrationMask = new Uint8Array(this.tempMask);
-        this.tempMask = null;
+        if (this.tempMask) {
+            this.calibrationMask = new Uint8Array(this.tempMask);
+            this.tempMask = null;
+        }
         console.log("[MicManager] Calibration finished. Mask captured.");
-        return Array.from(this.calibrationMask); // Return for saving
+        return this.calibrationMask ? Array.from(this.calibrationMask) : [];
+    }
+
+    abortCalibration() {
+        this.calibrationMode = false;
+        this.tempMask = null;
+        console.log("[MicManager] Calibration aborted.");
     }
 
     setStoredMask(maskArray) {

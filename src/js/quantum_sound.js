@@ -24,11 +24,21 @@ export class QuantumSound {
         this.baseNotes = ["C2", "E2", "G2", "C3"];
         this.activeNotes = new Set();
         this.manifest = null; // Will hold { "ambient": ["track_01.wav", ...], ... }
+        this.isCalibrating = false;
     }
 
     async init() {
+        if (this.initialized) return;
+
+        if (!window.Tone) {
+            console.log("[QuantumSound] Loading Tone.js dynamically...");
+            // Use esm.sh for a reliable ESM module of Tone.js
+            const module = await import('tone');
+            window.Tone = module;
+            console.log("[QuantumSound] Tone.js loaded.");
+        }
+
         await Tone.start();
-        this.initialized = true;
 
         // Master Effects Chain
         this.masterGain = new Tone.Gain(this.masterVolumeValue).toDestination();
@@ -60,8 +70,6 @@ export class QuantumSound {
         }).connect(this.reverb);
 
         // --- 2. Smart Shuffle Engine (CrossFadeManager) ---
-        // Instead of loading all files at once, we manage two active players per category
-        // that we crossfade between.
         this.activeCategory = 'ambient';
         this.crossfader = new Tone.CrossFade(0).connect(this.reverb);
 
@@ -72,14 +80,24 @@ export class QuantumSound {
         this.trackHistory = [];
         this.categories = ['ambient', 'harmonic', 'rhythmic', 'glitch'];
 
-        // Start the first track
+        this.initialized = true;
+
+        // Start checking for manifest
+        this.pollManifest();
+    }
+
+    async pollManifest() {
         await this.loadManifest();
         if (this.manifest && Object.keys(this.manifest).length > 0) {
-            this.scheduleNextTransition(1); // Start immediately
+            console.log("[QuantumSound] Manifest loaded and ready.");
+            // Only start transition if not already playing/scheduled to avoid double playback?
+            // Actually scheduleNextTransition checks if Tone is running.
+            // But we might want to ensure we don't call it multiple times if poll called multiple times.
+            // For now, this is fine because we stop polling on success.
+            this.scheduleNextTransition(1);
         } else {
-            console.warn("[QuantumSound] No audio manifest found. Waiting...");
-            // Retry loading manifest later or just wait
-            setTimeout(() => this.init(), 5000);
+            console.warn("[QuantumSound] No audio manifest found yet. Retrying in 5s...");
+            setTimeout(() => this.pollManifest(), 5000);
         }
     }
 
@@ -200,9 +218,9 @@ export class QuantumSound {
         return `track_${trackNum.toString().padStart(2, '0')}.wav`;
     }
 
-    toggle() {
+    async toggle() {
         if (!this.initialized) {
-            this.init();
+            await this.init();
         }
         this.enabled = !this.enabled;
 
@@ -338,14 +356,16 @@ export class QuantumSound {
 
     setAIVolume(value) {
         this.aiVolumeValue = value / 100;
-        const db = Tone.gainToDb(this.aiVolumeValue);
-        if (this.playerA) this.playerA.volume.rampTo(db, 0.1);
-        if (this.playerB) this.playerB.volume.rampTo(db, 0.1);
+        if (window.Tone && this.playerA) {
+            const db = Tone.gainToDb(this.aiVolumeValue);
+            this.playerA.volume.rampTo(db, 0.1);
+            if (this.playerB) this.playerB.volume.rampTo(db, 0.1);
+        }
     }
 
     setQuantumVolume(value) {
         this.quantumVolumeValue = value / 100;
-        if (this.quantumSynth) {
+        if (this.quantumSynth && window.Tone) {
             this.quantumSynth.volume.rampTo(Tone.gainToDb(this.quantumVolumeValue), 0.1);
         }
     }
@@ -362,7 +382,22 @@ export class QuantumSound {
     }
 
     async runCalibrationSweep(micManager) {
-        if (!this.initialized || !micManager) return;
+        if (!this.initialized) {
+            console.log("[QuantumSound] Auto-initializing for calibration...");
+            await this.init();
+        }
+
+        if (!micManager) {
+            console.error("[QuantumSound] Calibration Failed: MicManager instance is missing.");
+            return { error: "Internal Error: MicManager missing" };
+        }
+
+        if (!micManager.enabled) {
+            console.warn("[QuantumSound] Calibration Failed: Microphone is not enabled.");
+            return { error: "Microphone not active. Click 'Start Live Mic' first." };
+        }
+
+        this.isCalibrating = true;
         console.log("[QuantumSound] Starting high-speed calibration sweep...");
 
         // 1. Enter calibration mode
@@ -373,16 +408,34 @@ export class QuantumSound {
         // 2. Sweep the Synth (High speed frequency hops)
         const sweepNotes = ["C1", "G1", "C2", "G2", "C3", "G3", "C4", "G4", "C5"];
         for (const note of sweepNotes) {
+            if (!this.isCalibrating) {
+                micManager.abortCalibration();
+                this.setMasterVolume(originalVolume * 100);
+                return { error: "Calibration Stopped by User" };
+            }
             this.quantumSynth.triggerAttackRelease(note, "16n");
             await new Promise(r => setTimeout(r, 150));
         }
 
         // 3. Sweep the Samples (Rapid bursts of every track)
-        if (this.manifest) {
+        if (!this.manifest) {
+            console.log("[QuantumSound] Manifest missing, attempting reload...");
+            await this.loadManifest();
+        }
+
+        if (this.manifest && Object.keys(this.manifest).length > 0) {
             const categories = Object.keys(this.manifest);
+            console.log(`[QuantumSound] Starting sample sweep. Categories: ${categories.length}`);
             for (const cat of categories) {
                 const tracks = this.manifest[cat];
+                console.log(`[QuantumSound] Sweeping category ${cat} (${tracks.length} tracks)`);
                 for (const track of tracks) {
+                    if (!this.isCalibrating) {
+                        micManager.abortCalibration();
+                        this.setMasterVolume(originalVolume * 100);
+                        this.isCalibrating = false;
+                        return { error: "Calibration Stopped by User" };
+                    }
                     const url = `assets/audio/loops/${cat}/${track}`;
                     try {
                         // Use a temporary player for the sweep to not interrupt current playback
@@ -393,72 +446,92 @@ export class QuantumSound {
                         sweepPlayer.stop();
                         sweepPlayer.dispose();
                     } catch (e) {
-                        console.warn(`[QuantumSound] Sweep failed for ${url}`);
+                        // Only warn if it's not a user-abort
+                        if (this.isCalibrating) {
+                            console.warn(`[QuantumSound] Sweep failed for ${url}: ${e.message}`);
+                        }
                     }
                 }
             }
         }
-
-        // 4. Capture and Save
-        const mask = micManager.stopCalibration();
-        this.setMasterVolume(originalVolume * 100);
-
-        console.log("[QuantumSound] Sweep complete.");
-        return mask;
     }
+} else {
+    console.log("[QuantumSound] Manifest is empty or missing. Skipping sample sweep (Synth only calibration).");
+}
+
+if (!this.isCalibrating) {
+    micManager.abortCalibration();
+    this.setMasterVolume(originalVolume * 100);
+    this.isCalibrating = false; // Ensure flag is reset on early exit
+    return { error: "Calibration Stopped by User" };
+}
+
+// 4. Capture and Save
+const mask = micManager.stopCalibration();
+this.setMasterVolume(originalVolume * 100);
+this.isCalibrating = false;
+
+console.log("[QuantumSound] Sweep complete.");
+return mask;
+    }
+
+stopCalibrationSweep() {
+    this.isCalibrating = false;
+    if (this.quantumSynth) this.quantumSynth.releaseAll();
+}
 
     async saveCalibration(name, mask) {
-        try {
-            const response = await fetch('/api/calibration/save', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, mask })
-            });
-            return response.ok;
-        } catch (e) {
-            console.error("Failed to save calibration:", e);
-            return false;
-        }
-    }
-
-    async loadCalibration(name, micManager) {
-        try {
-            const response = await fetch(`/api/calibration/get/${name}`);
-            if (response.ok) {
-                const data = await response.json();
-                micManager.setStoredMask(data.mask);
-                return true;
-            }
-        } catch (e) {
-            console.error("Failed to load calibration:", e);
-        }
+    try {
+        const response = await fetch('/api/calibration/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, mask })
+        });
+        return response.ok;
+    } catch (e) {
+        console.error("Failed to save calibration:", e);
         return false;
     }
+}
+
+    async loadCalibration(name, micManager) {
+    try {
+        const response = await fetch(`/api/calibration/get/${name}`);
+        if (response.ok) {
+            const data = await response.json();
+            micManager.setStoredMask(data.mask);
+            return true;
+        }
+    } catch (e) {
+        console.error("Failed to load calibration:", e);
+    }
+    return false;
+}
 
     async listCalibrations() {
-        try {
-            const response = await fetch('/api/calibration/list');
-            if (response.ok) {
-                return await response.json();
-            }
-        } catch (e) {
-            console.error("Failed to list calibrations:", e);
+    try {
+        const response = await fetch('/api/calibration/list');
+        if (response.ok) {
+            return await response.json();
         }
-        return [];
+    } catch (e) {
+        console.error("Failed to list calibrations:", e);
     }
+    return [];
+}
 
-    cleanup() {
-        this.stopAll();
-        if (this.initialized) {
-            Tone.Transport.stop();
-            this.masterGain.dispose();
-            this.limiter.dispose();
-            this.reverb.dispose();
-            this.quantumSynth.dispose();
-            this.crossfader.dispose();
-            this.playerA.dispose();
-            this.playerB.dispose();
-            this.initialized = false;
-        }
+cleanup() {
+    this.stopAll();
+    if (this.initialized && window.Tone) {
+        Tone.Transport.stop();
+        this.masterGain.dispose();
+        this.limiter.dispose();
+        this.reverb.dispose();
+        this.quantumSynth.dispose();
+        this.crossfader.dispose();
+        this.playerA.dispose();
+        this.playerB.dispose();
+        this.initialized = false;
     }
+}
 }
