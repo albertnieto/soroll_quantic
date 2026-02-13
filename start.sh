@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Lluc Llum Production Start Script
+# Soroll Quàntic Production Start Script
 # Usage: ./start.sh [--dev]
 
 MODE="production"
@@ -8,7 +8,7 @@ if [[ "$1" == "--dev" ]]; then
     MODE="dev"
 fi
 
-echo "🌟 Starting Lluc Llum in $MODE mode..."
+echo "🌟 Starting Soroll Quàntic in $MODE mode..."
 
 # Ensure we are in the right directory
 cd "$(dirname "$0")"

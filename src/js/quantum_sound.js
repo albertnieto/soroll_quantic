@@ -69,6 +69,17 @@ export class QuantumSound {
             }
         }).connect(this.reverb);
 
+        // --- 1.5 Godray Synth (Ethereal Shimmer) ---
+        this.godraySynth = new Tone.PolySynth(Tone.FMSynth, {
+            harmonicity: 3.0,
+            modulationIndex: 10,
+            oscillator: { type: "sine" },
+            envelope: { attack: 0.1, decay: 0.5, sustain: 0.1, release: 2.0 },
+            modulation: { type: "square" },
+            modulationEnvelope: { attack: 0.1, decay: 0, sustain: 1, release: 0.5 }
+        }).connect(this.reverb);
+        this.godraySynth.volume.value = -5; // Slightly louder but softer tone
+
         // --- 2. Smart Shuffle Engine (CrossFadeManager) ---
         this.activeCategory = 'ambient';
         this.crossfader = new Tone.CrossFade(0).connect(this.reverb);
@@ -453,85 +464,98 @@ export class QuantumSound {
                     }
                 }
             }
+        } else {
+            console.log("[QuantumSound] Manifest is empty or missing. Skipping sample sweep (Synth only calibration).");
         }
-    }
-} else {
-    console.log("[QuantumSound] Manifest is empty or missing. Skipping sample sweep (Synth only calibration).");
-}
 
-if (!this.isCalibrating) {
-    micManager.abortCalibration();
-    this.setMasterVolume(originalVolume * 100);
-    this.isCalibrating = false; // Ensure flag is reset on early exit
-    return { error: "Calibration Stopped by User" };
-}
+        if (!this.isCalibrating) {
+            micManager.abortCalibration();
+            this.setMasterVolume(originalVolume * 100);
+            this.isCalibrating = false; // Ensure flag is reset on early exit
+            return { error: "Calibration Stopped by User" };
+        }
 
-// 4. Capture and Save
-const mask = micManager.stopCalibration();
-this.setMasterVolume(originalVolume * 100);
-this.isCalibrating = false;
+        // 4. Capture and Save
+        const mask = micManager.stopCalibration();
+        this.setMasterVolume(originalVolume * 100);
+        this.isCalibrating = false;
 
-console.log("[QuantumSound] Sweep complete.");
-return mask;
+        console.log("[QuantumSound] Sweep complete.");
+        return mask;
     }
 
-stopCalibrationSweep() {
-    this.isCalibrating = false;
-    if (this.quantumSynth) this.quantumSynth.releaseAll();
-}
+    stopCalibrationSweep() {
+        this.isCalibrating = false;
+        if (this.quantumSynth) this.quantumSynth.releaseAll();
+    }
 
     async saveCalibration(name, mask) {
-    try {
-        const response = await fetch('/api/calibration/save', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, mask })
-        });
-        return response.ok;
-    } catch (e) {
-        console.error("Failed to save calibration:", e);
-        return false;
+        try {
+            const response = await fetch('/api/calibration/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, mask })
+            });
+            return response.ok;
+        } catch (e) {
+            console.error("Failed to save calibration:", e);
+            return false;
+        }
     }
-}
 
     async loadCalibration(name, micManager) {
-    try {
-        const response = await fetch(`/api/calibration/get/${name}`);
-        if (response.ok) {
-            const data = await response.json();
-            micManager.setStoredMask(data.mask);
-            return true;
+        try {
+            const response = await fetch(`/api/calibration/get/${name}`);
+            if (response.ok) {
+                const data = await response.json();
+                micManager.setStoredMask(data.mask);
+                return true;
+            }
+        } catch (e) {
+            console.error("Failed to load calibration:", e);
         }
-    } catch (e) {
-        console.error("Failed to load calibration:", e);
+        return false;
     }
-    return false;
-}
 
     async listCalibrations() {
-    try {
-        const response = await fetch('/api/calibration/list');
-        if (response.ok) {
-            return await response.json();
+        try {
+            const response = await fetch('/api/calibration/list');
+            if (response.ok) {
+                return await response.json();
+            }
+        } catch (e) {
+            console.error("Failed to list calibrations:", e);
         }
-    } catch (e) {
-        console.error("Failed to list calibrations:", e);
+        return [];
     }
-    return [];
-}
 
-cleanup() {
-    this.stopAll();
-    if (this.initialized && window.Tone) {
-        Tone.Transport.stop();
-        this.masterGain.dispose();
-        this.limiter.dispose();
-        this.reverb.dispose();
-        this.quantumSynth.dispose();
-        this.crossfader.dispose();
-        this.playerA.dispose();
-        this.playerB.dispose();
-        this.initialized = false;
+    playGodRaySound() {
+        if (!this.initialized || !this.enabled) return;
+        // Play an Ethereal extended chord (Open voicing)
+        const chord = Math.random() > 0.5
+            ? ["C4", "G4", "C5", "E5", "B5"]
+            : ["F4", "A4", "C5", "E5", "A5"];
+
+        // Stagger the notes slightly for specific 'shimmer' feel
+        const now = Tone.now();
+        chord.forEach((note, i) => {
+            this.godraySynth.triggerAttackRelease(note, "2n", now + i * 0.05, 0.5);
+        });
     }
-}
+
+    cleanup() {
+        this.stopAll();
+        if (this.initialized && window.Tone) {
+            Tone.Transport.stop();
+            this.masterGain.dispose();
+            this.limiter.dispose();
+            this.reverb.dispose();
+            this.quantumSynth.dispose();
+            this.godraySynth.dispose();
+            this.crossfader.dispose();
+            this.playerA.dispose();
+            this.playerB.dispose();
+            this.initialized = false;
+        }
+    }
 }

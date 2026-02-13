@@ -1,4 +1,4 @@
-# Lluc Llum Production Guide
+# Soroll Quàntic Production Guide
 
 ## 1. System Preparation
 For a robust installation, configure the macOS system as follows:

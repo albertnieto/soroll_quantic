@@ -1,5 +1,5 @@
 {
-  "name": "lluc-llum",
+  "name": "soroll-quantic",
   "version": "1.0.0",
   "description": "Quantum Qubit Visualization with WebGL and GLSL Shaders",
   "type": "module",
@@ -7,7 +7,13 @@
     "dev": "python3 server.py",
     "start": "python3 server.py"
   },
-  "keywords": ["quantum", "webgl", "three.js", "glsl", "visualization"],
+  "keywords": [
+    "quantum",
+    "webgl",
+    "three.js",
+    "glsl",
+    "visualization"
+  ],
   "author": "",
   "license": "MIT"
 }

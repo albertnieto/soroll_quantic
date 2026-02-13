@@ -5,7 +5,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 
 import { Qubit } from './Qubit.js';
-import { plasmaVertexShader, plasmaFragmentShader, qubitVertexShader, qubitFragmentShader } from './shaders.js';
+import { plasmaVertexShader, plasmaFragmentShader, qubitVertexShader, qubitFragmentShader, godraysVertexShader, godraysFragmentShader } from './shaders.js';
 import { particleVertexShader, particleFragmentShader } from './advanced_shaders.js';
 import { blackHoleBillboardVertexShader, blackHoleBillboardFragmentShader, lensingFsQuadShader } from './black_hole_shader.js';
 import { QuantumCircuit } from './quantum_circuit.js';
@@ -41,6 +41,7 @@ controls.enableDamping = true;
 let qubitSpacing = 8.5;
 const qubits = [];
 const qubitMeshes = [];
+const godrayMeshes = []; // [NEW] Godray Meshes
 const qubitCloudMeshes = []; // Stores { state0, state1 } for each qubit
 const particleSystem = { mesh: null, uniforms: null };
 const quantumCircuit = new QuantumCircuit();
@@ -219,6 +220,49 @@ function createQubitSphere(position, index) {
     scene.add(cloud1);
 
     qubitCloudMeshes.push({ state0: cloud0, state1: cloud1 });
+
+    // --- [NEW] Create Godray Mesh ---
+    const godrayGeometry = new THREE.SphereGeometry(6, 32, 32);
+    /* [DEBUG] Temporarily disabled ShaderMaterial
+    const godrayMaterial = new THREE.ShaderMaterial({
+        vertexShader: godraysVertexShader,
+        fragmentShader: godraysFragmentShader,
+        uniforms: {
+            uTime: { value: 0 },
+            uColor: { value: new THREE.Color(0xffaa44) },
+            uOpacity: { value: 0.0 }
+        },
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        side: THREE.FrontSide
+    });
+    */
+
+    // [DEBUG] SIMPLE MATERIAL TEST
+    // If this shows red, the mesh is fine, and the shader was the problem.
+    const godrayMaterial = new THREE.MeshBasicMaterial({
+        color: 0xff0000,
+        transparent: true,
+        opacity: 0.5,
+        side: THREE.DoubleSide // Ensure visibility from all angles
+    });
+
+    const godrayMesh = new THREE.Mesh(godrayGeometry, godrayMaterial);
+    godrayMesh.position.copy(position);
+    godrayMesh.visible = false; // Hidden by default
+    godrayMesh.layers.set(1); // [FIX] Ensure it's rendered in the foreground pass!
+    godrayMesh.renderOrder = 9999; // [FIX] Force on top
+
+    // [DEBUG] Add Wireframe Helper
+    const wireGeo = new THREE.WireframeGeometry(godrayGeometry);
+    const wireMat = new THREE.LineBasicMaterial({ color: 0x00ff00, linewidth: 2 });
+    const wireframe = new THREE.LineSegments(wireGeo, wireMat);
+    wireframe.layers.set(1);
+    godrayMesh.add(wireframe);
+
+    scene.add(godrayMesh);
+    godrayMeshes.push(godrayMesh);
 }
 
 
@@ -574,7 +618,8 @@ let shadersEnabled = {
     accretion: false, // Default false
     lensing: true,
     einstein: false, // Default false
-    bloom: true
+    bloom: true,
+    godrays: true // [NEW] Default Enabled
 };
 
 document.getElementById('toggle-plasma').addEventListener('change', (e) => {
@@ -608,6 +653,11 @@ document.getElementById('toggle-seamless').addEventListener('change', (e) => {
 
 document.getElementById('toggle-entanglement').addEventListener('change', (e) => {
     shadersEnabled.entanglement = e.target.checked;
+});
+
+// [NEW] Godrays Toggle
+document.getElementById('toggle-godrays').addEventListener('change', (e) => {
+    shadersEnabled.godrays = e.target.checked;
 });
 
 document.getElementById('toggle-orbital').addEventListener('change', (e) => {
@@ -1101,11 +1151,50 @@ function animate() {
             if (micThresholds[i] > THRESHOLD_LIMIT && qubits[i].coherent) {
                 if (indicatorEl) indicatorEl.classList.add('breach');
                 qubits[i].collapse(Math.random() > 0.5 ? 1 : 0);
+
+                // [NEW] Trigger Godrays & Sound
+                if (quantumSound.enabled) quantumSound.playGodRaySound();
+
+                // Trigger Visual
+                if (shadersEnabled.godrays) {
+                    const gMesh = godrayMeshes[i];
+                    if (gMesh) {
+                        gMesh.visible = true;
+                        if (gMesh.material.uniforms) {
+                            gMesh.material.uniforms.uOpacity.value = 1.0;
+                            gMesh.material.uniforms.uTime.value = 0.0;
+                            // Randomize color slightly?
+                            gMesh.material.uniforms.uColor.value.setHSL(0.1 + Math.random() * 0.1, 1.0, 0.5);
+                        }
+                    }
+                }
+
             } else if (indicatorEl) {
                 indicatorEl.classList.remove('breach');
             }
         }
     }
+
+    // [NEW] Animate Godrays
+    godrayMeshes.forEach(mesh => {
+        if (!mesh.visible) return;
+
+        if (mesh.material.uniforms) {
+            mesh.material.uniforms.uTime.value += 0.05;
+
+            // Decay opacity
+            const currentOp = mesh.material.uniforms.uOpacity.value;
+            if (currentOp > 0.01) {
+                mesh.material.uniforms.uOpacity.value -= 0.015; // Fade over ~60 frames
+                // Expand slightly
+                mesh.scale.multiplyScalar(1.005);
+            } else {
+                mesh.visible = false;
+                mesh.material.uniforms.uOpacity.value = 0.0;
+                mesh.scale.set(1, 1, 1); // Reset scale
+            }
+        }
+    });
 
     quantumSound.update(qubits);
 
@@ -1128,7 +1217,27 @@ function animate() {
     camera.layers.enableAll();
 }
 
+// [debug] Godrays Initialization
+if (godrayMeshes.length > 0 && time < 0.1) {
+    console.log("Godrays Initialized. Count:", godrayMeshes.length);
+}
+
 animate();
+
+// [DEBUG] Manual Trigger
+window.addEventListener('keydown', (e) => {
+    if (e.key === 'g' || e.key === 'G') {
+        console.log("Manual Godray Trigger on Qubit 0");
+        const gMesh = godrayMeshes[0];
+        if (gMesh) {
+            gMesh.visible = true;
+            gMesh.material.uniforms.uOpacity.value = 1.0;
+            gMesh.material.uniforms.uTime.value = 0.0;
+            gMesh.material.uniforms.uColor.value.setHex(0xffaa00);
+        }
+        if (quantumSound.enabled) quantumSound.playGodRaySound();
+    }
+});
 
 window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;

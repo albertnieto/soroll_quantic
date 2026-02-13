@@ -1,4 +1,4 @@
-# Lluc Llum - Quantum Visualization & Laboratory
+# Soroll Quàntic - Quantum Visualization & Laboratory
 
 A multi-layered quantum qubit visualization and algorithmic laboratory. This project combines PennyLane's quantum simulation with high-performance WebGL shaders to create a premium, interactive experience of quantum physics.
 
