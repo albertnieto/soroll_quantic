@@ -4,6 +4,8 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 
+console.log("%c GODRAYS VERSION 1002 LOADED - FIX APPLIED ", "background: #00ffff; color: #000; font-weight: bold;");
+
 import { Qubit } from './Qubit.js';
 import { plasmaVertexShader, plasmaFragmentShader, qubitVertexShader, qubitFragmentShader, godraysVertexShader, godraysFragmentShader } from './shaders.js';
 import { particleVertexShader, particleFragmentShader } from './advanced_shaders.js';
@@ -221,9 +223,7 @@ function createQubitSphere(position, index) {
 
     qubitCloudMeshes.push({ state0: cloud0, state1: cloud1 });
 
-    // --- [NEW] Create Godray Mesh ---
-    const godrayGeometry = new THREE.SphereGeometry(6, 32, 32);
-    /* [DEBUG] Temporarily disabled ShaderMaterial
+    const godrayGeometry = new THREE.PlaneGeometry(25, 25);
     const godrayMaterial = new THREE.ShaderMaterial({
         vertexShader: godraysVertexShader,
         fragmentShader: godraysFragmentShader,
@@ -235,31 +235,17 @@ function createQubitSphere(position, index) {
         transparent: true,
         depthWrite: false,
         blending: THREE.AdditiveBlending,
-        side: THREE.FrontSide
-    });
-    */
-
-    // [DEBUG] SIMPLE MATERIAL TEST
-    // If this shows red, the mesh is fine, and the shader was the problem.
-    const godrayMaterial = new THREE.MeshBasicMaterial({
-        color: 0xff0000,
-        transparent: true,
-        opacity: 0.5,
-        side: THREE.DoubleSide // Ensure visibility from all angles
+        side: THREE.DoubleSide
     });
 
     const godrayMesh = new THREE.Mesh(godrayGeometry, godrayMaterial);
     godrayMesh.position.copy(position);
-    godrayMesh.visible = false; // Hidden by default
-    godrayMesh.layers.set(1); // [FIX] Ensure it's rendered in the foreground pass!
-    godrayMesh.renderOrder = 9999; // [FIX] Force on top
+    godrayMesh.visible = false;
 
-    // [DEBUG] Add Wireframe Helper
-    const wireGeo = new THREE.WireframeGeometry(godrayGeometry);
-    const wireMat = new THREE.LineBasicMaterial({ color: 0x00ff00, linewidth: 2 });
-    const wireframe = new THREE.LineSegments(wireGeo, wireMat);
-    wireframe.layers.set(1);
-    godrayMesh.add(wireframe);
+    godrayMesh.layers.enable(0);
+    godrayMesh.layers.enable(1);
+
+    godrayMesh.renderOrder = -10;
 
     scene.add(godrayMesh);
     godrayMeshes.push(godrayMesh);
@@ -1180,6 +1166,7 @@ function animate() {
         if (!mesh.visible) return;
 
         if (mesh.material.uniforms) {
+            mesh.lookAt(camera.position); // Billboard effect
             mesh.material.uniforms.uTime.value += 0.05;
 
             // Decay opacity
@@ -1224,16 +1211,17 @@ if (godrayMeshes.length > 0 && time < 0.1) {
 
 animate();
 
-// [DEBUG] Manual Trigger
 window.addEventListener('keydown', (e) => {
     if (e.key === 'g' || e.key === 'G') {
         console.log("Manual Godray Trigger on Qubit 0");
         const gMesh = godrayMeshes[0];
         if (gMesh) {
             gMesh.visible = true;
-            gMesh.material.uniforms.uOpacity.value = 1.0;
-            gMesh.material.uniforms.uTime.value = 0.0;
-            gMesh.material.uniforms.uColor.value.setHex(0xffaa00);
+            if (gMesh.material.uniforms) {
+                gMesh.material.uniforms.uOpacity.value = 1.0;
+                gMesh.material.uniforms.uTime.value = 0.0;
+                gMesh.material.uniforms.uColor.value.setHex(0xffaa00);
+            }
         }
         if (quantumSound.enabled) quantumSound.playGodRaySound();
     }

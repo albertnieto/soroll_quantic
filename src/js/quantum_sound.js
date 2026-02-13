@@ -531,15 +531,24 @@ export class QuantumSound {
 
     playGodRaySound() {
         if (!this.initialized || !this.enabled) return;
-        // Play an Ethereal extended chord (Open voicing)
-        const chord = Math.random() > 0.5
-            ? ["C4", "G4", "C5", "E5", "B5"]
-            : ["F4", "A4", "C5", "E5", "A5"];
 
-        // Stagger the notes slightly for specific 'shimmer' feel
+        // --- Pool of Ethereal Chords (Lydian/Extended) ---
+        const chords = [
+            ["C4", "G4", "B4", "E5", "A5"], // Cmaj13
+            ["F4", "A4", "C5", "E5", "G5", "B5"], // Fmaj7#11
+            ["A3", "E4", "G4", "B4", "D5"], // Am9
+            ["G3", "D4", "F4", "A4", "C5", "E5"], // G13
+            ["D4", "A4", "C5", "E5", "F#5"], // D9#11
+            ["Bb3", "F4", "A4", "D5", "F5"]  // Bbmaj7
+        ];
+
+        const chord = chords[Math.floor(Math.random() * chords.length)];
+
+        // Stagger the notes for 'shimmer'
         const now = Tone.now();
         chord.forEach((note, i) => {
-            this.godraySynth.triggerAttackRelease(note, "2n", now + i * 0.05, 0.5);
+            const duration = 2.0 + Math.random() * 2.0; // Random length releases
+            this.godraySynth.triggerAttackRelease(note, duration, now + i * 0.08, 0.4);
         });
     }
 

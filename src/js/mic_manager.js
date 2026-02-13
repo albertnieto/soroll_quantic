@@ -16,6 +16,10 @@ export class MicManager {
     }
 
     async getDevices() {
+        if (!navigator.mediaDevices) {
+            console.error('Error: navigator.mediaDevices is undefined. \nThis usually happens because the site is not running in a Secure Context (localhost or HTTPS). \nPlease use http://localhost:8050 instead of an IP address.');
+            return [];
+        }
         try {
             const devices = await navigator.mediaDevices.enumerateDevices();
             return devices.filter(device => device.kind === 'audioinput');
@@ -26,6 +30,11 @@ export class MicManager {
     }
 
     async init(deviceId = null) {
+        if (!navigator.mediaDevices) {
+            console.error('Error: navigator.mediaDevices is undefined. Cannot access microphone. Use http://localhost:8050');
+            this.enabled = false;
+            return;
+        }
         if (this.audioContext) {
             await this.stop();
         }
