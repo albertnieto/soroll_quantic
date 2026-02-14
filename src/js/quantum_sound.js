@@ -166,9 +166,10 @@ export class QuantumSound {
     updateEntanglementSound(count) {
         if (!this.enabled || !this.initialized) return;
         const intensity = Math.min(count / 4, 1.0);
-        const db = intensity > 0 ? Tone.gainToDb(intensity * 0.5 * this.quantumVolumeValue) : -Infinity;
-        this.entanglementSynth.volume.rampTo(db, 0.1);
-        this.entanglementSynth.modulationIndex.rampTo(intensity * 50, 0.1);
+        // Use -100 for silence instead of -Infinity for smoother ramping
+        const db = intensity > 0 ? Tone.gainToDb(intensity * 0.5 * this.quantumVolumeValue) : -100;
+        this.entanglementSynth.volume.rampTo(db, 0.05);
+        this.entanglementSynth.modulationIndex.rampTo(intensity * 50, 0.05);
     }
 
     update(qubits) {

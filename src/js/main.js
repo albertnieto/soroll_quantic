@@ -587,16 +587,22 @@ function executeNextGate() {
                 qubits[wire].beta = 0;
                 qubits[wire].phase = 0;
                 qubits[wire].coherent = true;
+                qubits[wire].entangledWith = []; // Clear entanglement on reset
             });
         } else if (gate.type === 'H') {
             gate.wires.forEach(wire => {
                 qubits[wire].alpha = Math.cos(Math.PI / 4);
                 qubits[wire].beta = Math.sin(Math.PI / 4);
                 qubits[wire].coherent = true;
+                qubits[wire].entangledWith = []; // Reset on new state
             });
         } else if (gate.type === 'CNOT') {
             const control = gate.wires[0];
             const target = gate.wires[1];
+            // Bringing qubits back to life on interaction
+            qubits[control].coherent = true;
+            qubits[target].coherent = true;
+
             if (qubits[control].getProbability1() > 0.5) {
                 const temp = qubits[target].alpha;
                 qubits[target].alpha = qubits[target].beta;
@@ -611,22 +617,31 @@ function executeNextGate() {
         } else if (gate.type === 'RY') {
             const angle = gate.params[0];
             gate.wires.forEach(wire => {
-                qubits[wire].alpha = Math.cos(angle / 2);
-                qubits[wire].beta = Math.sin(angle / 2);
+                qubits[wire].coherent = true;
+                qubits[wire].entangledWith = [];
+                const cos = Math.cos(angle / 2);
+                const sin = Math.sin(angle / 2);
+                const a = qubits[wire].alpha;
+                const b = qubits[wire].beta;
+                qubits[wire].alpha = cos * a - sin * b;
+                qubits[wire].beta = sin * a + cos * b;
             });
         } else if (gate.type === 'RX') {
             const angle = gate.params[0];
             gate.wires.forEach(wire => {
+                qubits[wire].coherent = true;
+                qubits[wire].entangledWith = [];
                 const cos = Math.cos(angle / 2);
                 const sin = Math.sin(angle / 2);
-                const newAlpha = cos * qubits[wire].alpha;
-                const newBeta = sin * qubits[wire].beta;
-                qubits[wire].alpha = newAlpha;
-                qubits[wire].beta = newBeta;
+                const a = qubits[wire].alpha;
+                const b = qubits[wire].beta;
+                qubits[wire].alpha = a * cos - b * sin;
+                qubits[wire].beta = b * cos + a * sin;
             });
         } else if (gate.type === 'RZ') {
             const angle = gate.params[0];
             gate.wires.forEach(wire => {
+                qubits[wire].coherent = true;
                 qubits[wire].phase += angle;
             });
         }
