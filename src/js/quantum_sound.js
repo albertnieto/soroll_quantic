@@ -6,7 +6,8 @@ export class QuantumSound {
         // Volumes
         this.masterVolumeValue = 0.3;
         this.aiVolumeValue = 0.5;
-        this.quantumVolumeValue = 0.5;
+        this.gateVolumeValue = 0.5;
+        this.entanglementVolumeValue = 0.5;
 
         // Sound state
         this.entanglementIntensity = 0;
@@ -155,7 +156,7 @@ export class QuantumSound {
 
         // Duration depends on style (crystalline needs more time)
         const duration = this.styles.gate === 'crystalline' ? "2n" : "16n";
-        this.gateSynth.triggerAttackRelease(note, duration, undefined, 0.4);
+        this.gateSynth.triggerAttackRelease(note, duration, undefined, this.gateVolumeValue * 0.5);
     }
 
     playCollapseSound() {
@@ -167,18 +168,31 @@ export class QuantumSound {
         if (!this.enabled || !this.initialized) return;
         const intensity = Math.min(count / 4, 1.0);
         // Use -100 for silence instead of -Infinity for smoother ramping
-        const db = intensity > 0 ? Tone.gainToDb(intensity * 0.5 * this.quantumVolumeValue) : -100;
+        const db = intensity > 0 ? Tone.gainToDb(intensity * 0.5 * this.entanglementVolumeValue) : -100;
         this.entanglementSynth.volume.rampTo(db, 0.05);
         this.entanglementSynth.modulationIndex.rampTo(intensity * 50, 0.05);
     }
 
     update(qubits) {
         if (!this.enabled || !this.initialized) return;
-        let entanglementCount = 0;
-        qubits.forEach(q => {
-            entanglementCount += q.entangledWith.length;
-        });
-        this.updateEntanglementSound(entanglementCount / 2);
+
+        let validLinks = 0;
+        // Only count reciprocal, mutual links between coherent qubits
+        for (let i = 0; i < qubits.length; i++) {
+            const qA = qubits[i];
+            if (!qA.coherent) continue;
+
+            qA.entangledWith.forEach(targetId => {
+                const qB = qubits[targetId];
+                // A link is only valid if BOTH qubits recognize each other and are coherent
+                if (qB && qB.coherent && qB.entangledWith.includes(i)) {
+                    validLinks++;
+                }
+            });
+        }
+
+        // Divide by 2 because each mutual link is counted twice (A->B and B->A)
+        this.updateEntanglementSound(validLinks / 2);
     }
 
     getOutputFFT() {
@@ -196,12 +210,13 @@ export class QuantumSound {
         if (this.aiGain) this.aiGain.gain.rampTo(this.aiVolumeValue, 0.1);
     }
 
-    setQuantumVolume(value) {
-        this.quantumVolumeValue = value / 100;
+    setGateVolume(value) {
+        this.gateVolumeValue = value / 100;
     }
 
-    setBassDepth(value) { }
-    setResonance(value) { }
+    setEntanglementVolume(value) {
+        this.entanglementVolumeValue = value / 100;
+    }
 
     async runCalibrationSweep(micManager) {
         if (!this.initialized || !micManager || !micManager.enabled) {

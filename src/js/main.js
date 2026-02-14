@@ -796,22 +796,16 @@ document.getElementById('ai-volume').addEventListener('input', (e) => {
     quantumSound.setAIVolume(value);
 });
 
-document.getElementById('quantum-volume').addEventListener('input', (e) => {
+document.getElementById('gate-volume').addEventListener('input', (e) => {
     const value = e.target.value;
-    document.getElementById('quantum-volume-value').textContent = value + '%';
-    quantumSound.setQuantumVolume(value);
+    document.getElementById('gate-volume-value').textContent = value + '%';
+    quantumSound.setGateVolume(value);
 });
 
-document.getElementById('sound-bass').addEventListener('input', (e) => {
+document.getElementById('entanglement-volume').addEventListener('input', (e) => {
     const value = e.target.value;
-    document.getElementById('bass-value').textContent = value + '%';
-    quantumSound.setBassDepth(value);
-});
-
-document.getElementById('sound-resonance').addEventListener('input', (e) => {
-    const value = e.target.value;
-    document.getElementById('resonance-value').textContent = value + '%';
-    quantumSound.setResonance(value);
+    document.getElementById('entanglement-volume-value').textContent = value + '%';
+    quantumSound.setEntanglementVolume(value);
 });
 
 document.getElementById('gate-sound-style').addEventListener('change', (e) => {
@@ -973,7 +967,13 @@ function animate() {
             bb.material.uniforms.uCameraPos.value.copy(camera.position);
 
             let targetBH = 0.0;
-            if (qubit.coherent && qubit.entangledWith.length > 0) {
+            // Visual check: Only show entanglement if it's mutual and both are coherent
+            const isMutuallyEntangled = qubit.coherent && qubit.entangledWith.some(id => {
+                const other = qubits[id];
+                return other && other.coherent && other.entangledWith.includes(i);
+            });
+
+            if (isMutuallyEntangled) {
                 targetBH = 1.0;
             }
             const currentBH = bb.material.uniforms.uBlackHoleStrength.value;
