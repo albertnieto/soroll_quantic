@@ -9,17 +9,15 @@ export class MicManager {
         this.enabled = false;
         this.source = null;
 
-        // Calibration & Masking
-        this.calibrationMode = false;
-        this.calibrationMask = null; // Buffer of max magnitudes [0-255]
-        this.tempMask = null;        // Used during active calibration sweep
+        // Sticky Adaptive Floor (Long-term preference)
+        // We want to ignore constant noise but react to peaks.
+        this.noiseFloor = 0.05;
+        this.noiseGate = 0.005;
+        this.sensitivity = 5.0;    // Boosted sensitivity for subtle peaks
     }
 
     async getDevices() {
-        if (!navigator.mediaDevices) {
-            console.error('Error: navigator.mediaDevices is undefined. \nThis usually happens because the site is not running in a Secure Context (localhost or HTTPS). \nPlease use http://localhost:8050 instead of an IP address.');
-            return [];
-        }
+        if (!navigator.mediaDevices) return [];
         try {
             const devices = await navigator.mediaDevices.enumerateDevices();
             return devices.filter(device => device.kind === 'audioinput');
@@ -30,25 +28,13 @@ export class MicManager {
     }
 
     async init(deviceId = null) {
-        if (!navigator.mediaDevices) {
-            console.error('Error: navigator.mediaDevices is undefined. Cannot access microphone. Use http://localhost:8050');
-            this.enabled = false;
-            return;
-        }
-        if (this.audioContext) {
-            await this.stop();
-        }
+        if (this.audioContext) await this.stop();
 
         try {
-            this.audioContext = new (window.AudioContext || window.webkitAudioContext)({
-                latencyHint: 'interactive',
-                sampleRate: 44100,
-            });
-
+            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
             const constraints = {
                 audio: {
                     deviceId: deviceId ? { exact: deviceId } : undefined,
-                    channelCount: { ideal: 1 },
                     echoCancellation: false,
                     noiseSuppression: false,
                     autoGainControl: false
@@ -56,91 +42,58 @@ export class MicManager {
             };
 
             this.stream = await navigator.mediaDevices.getUserMedia(constraints);
-            const source = this.audioContext.createMediaStreamSource(this.stream);
-
+            this.source = this.audioContext.createMediaStreamSource(this.stream);
             this.analyser = this.audioContext.createAnalyser();
-            this.analyser.fftSize = 512; // Higher resolution for better masking
-            this.analyser.smoothingTimeConstant = 0.2; // Faster response for calibration
+            this.analyser.fftSize = 256;
             this.dataArray = new Uint8Array(this.analyser.frequencyBinCount);
-
-            this.source = source;
-            source.connect(this.analyser);
+            this.source.connect(this.analyser);
 
             this.enabled = true;
-            console.log('MicManager initialized in FFT mode');
         } catch (error) {
             console.error('Error accessing microphone:', error);
             this.enabled = false;
         }
     }
 
-    startCalibration() {
-        this.calibrationMode = true;
-        this.tempMask = new Uint8Array(this.analyser.frequencyBinCount).fill(0);
-        console.log("[MicManager] Calibration started...");
-    }
-
-    stopCalibration() {
-        this.calibrationMode = false;
-        if (this.tempMask) {
-            this.calibrationMask = new Uint8Array(this.tempMask);
-            this.tempMask = null;
-        }
-        console.log("[MicManager] Calibration finished. Mask captured.");
-        return this.calibrationMask ? Array.from(this.calibrationMask) : [];
-    }
-
-    abortCalibration() {
-        this.calibrationMode = false;
-        this.tempMask = null;
-        console.log("[MicManager] Calibration aborted.");
-    }
-
-    setStoredMask(maskArray) {
-        if (maskArray && maskArray.length === this.analyser.frequencyBinCount) {
-            this.calibrationMask = new Uint8Array(maskArray);
-            console.log("[MicManager] Applied stored calibration mask.");
-        }
-    }
-
     update() {
         if (!this.enabled || !this.analyser) return;
 
-        // Use Frequency Domain (FFT) instead of Time Domain (RMS)
         this.analyser.getByteFrequencyData(this.dataArray);
 
-        if (this.calibrationMode && this.tempMask) {
-            // Keep the peaks of everything we hear during calibration
-            for (let i = 0; i < this.dataArray.length; i++) {
-                if (this.dataArray[i] > this.tempMask[i]) {
-                    this.tempMask[i] = this.dataArray[i];
-                }
-            }
-        }
-
-        let totalEnergy = 0;
-        let count = 0;
-
+        // 1. Calculate Instant Energy
+        let total = 0;
         for (let i = 0; i < this.dataArray.length; i++) {
-            let magnitude = this.dataArray[i];
+            total += this.dataArray[i] / 255;
+        }
+        const instantEnergy = total / this.dataArray.length;
 
-            // Apply Masking: Subtract the room fingerprint
-            if (this.calibrationMask && !this.calibrationMode) {
-                // We subtract the mask and add a small safety margin (buffer)
-                // A higher margin means more aggressive noise cancellation
-                const margin = 10;
-                magnitude = Math.max(0, magnitude - (this.calibrationMask[i] + margin));
-            }
+        // 2. Asymmetrical Heavy Mean
+        // We want to favor the "Long History" permanent sound.
+        let followRate = 0.0005; // Standard slow follow
 
-            // Square it for "energy-like" distribution
-            totalEnergy += (magnitude / 255) * (magnitude / 255);
-            count++;
+        if (instantEnergy > this.noiseFloor) {
+            // If the sound is LOUDER than the floor (e.g. someone talking),
+            // adapt EXTREMELY slowly. We don't want the floor to "eat" the conversation.
+            followRate = 0.0001;
+        } else {
+            // If the room gets quieter, follow it a bit faster to find the new true floor.
+            followRate = 0.002;
         }
 
-        const instantEnergy = Math.sqrt(totalEnergy / count);
+        this.noiseFloor = this.noiseFloor * (1 - followRate) + instantEnergy * followRate;
 
-        // Smoothing
-        this.energy = this.energy * 0.7 + (instantEnergy * 5.0) * 0.3;
+        // 3. Peak Detection (Relative to the permanent floor)
+        let delta = instantEnergy - (this.noiseFloor + this.noiseGate);
+
+        if (delta > 0) {
+            // We found a peak relative to the long-term background noise
+            this.energy = delta * this.sensitivity;
+        } else {
+            // Fade out activation smoothly
+            this.energy *= 0.85;
+            if (this.energy < 0.001) this.energy = 0;
+        }
+
         if (this.energy > 1.0) this.energy = 1.0;
     }
 
@@ -148,16 +101,16 @@ export class MicManager {
         return this.energy;
     }
 
-    getSource() {
-        return this.source;
-    }
-
-    stop() {
+    async stop() {
         if (this.stream) {
             this.stream.getTracks().forEach(track => track.stop());
+            this.stream = null;
         }
         if (this.audioContext) {
-            this.audioContext.close();
+            if (this.audioContext.state !== 'closed') {
+                await this.audioContext.close();
+            }
+            this.audioContext = null;
         }
         this.enabled = false;
     }

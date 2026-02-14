@@ -17,6 +17,7 @@ export class Qubit {
         this.coherent = false;
         this.alpha = finalState === 0 ? 1 : 0;
         this.beta = finalState === 1 ? 1 : 0;
+        this.entangledWith = []; // Clear local links
     }
 
     getProbability0() {

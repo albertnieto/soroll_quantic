@@ -48,7 +48,9 @@
             </div>
             <div class="panel-content">
                 <div class="shader-toggle">
-                    <label><input type="checkbox" id="toggle-sound"> Enable Sound</label>
+                    <button id="start-sound"
+                        style="width:100%;padding:8px;background:#004444;color:#00ffff;border:1px solid #00ffff;border-radius:5px;cursor:pointer;font-family:inherit;font-size:11px;">Start
+                        Quantum Sound</button>
                 </div>
                 <div class="shader-toggle" style="margin-top:10px;">
                     <label style="display:block;margin-bottom:5px;font-size:10px;">Input Device</label>
@@ -59,16 +61,6 @@
                     <button id="start-mic"
                         style="width:100%;padding:8px;background:#004444;color:#00ffff;border:1px solid #00ffff;border-radius:5px;cursor:pointer;font-family:inherit;font-size:11px;">Start
                         Live Mic (Input)</button>
-                </div>
-                <div class="sound-control" style="margin-top:10px;">
-                    <label style="display:block;margin-bottom:5px;font-size:10px;">Sound Mode</label>
-                    <select id="sound-mode"
-                        style="width:100%;padding:5px;background:#002222;color:#00ffff;border:1px solid #00ffff;border-radius:5px;font-size:10px;margin-bottom:10px;">
-                        <option value="atmospheric">Atmospheric (AI Loops)</option>
-                        <option value="synthetic">Synthetic (Quantum Engine)</option>
-                        <option value="hybrid" selected>Hybrid (AI + Quantum)</option>
-                        <option value="interactive">Interactive (Mic Modulation)</option>
-                    </select>
                 </div>
                 <div class="sound-control">
                     <label>Master Volume</label>
@@ -95,31 +87,46 @@
                     <input type="range" id="sound-resonance" min="0" max="100" value="50" step="1">
                     <div class="value-display" id="resonance-value">50%</div>
                 </div>
-                <div class="sound-control" style="margin-top:15px; border-top: 1px solid #004444; padding-top: 15px;">
-                    <label style="display:block;margin-bottom:5px;font-size:10px;color:#00ffff;">Acoustic Tuning
-                        (AEC)</label>
-                    <div style="margin-bottom:10px;">
-                        <input type="text" id="calibration-name-input" placeholder="Room Name (e.g. Studio A)"
-                            style="width:100%;padding:5px;margin-bottom:5px;background:#002222;color:#00ffff;border:1px solid #00ffff;border-radius:5px;font-size:10px;">
-                        <div style="display:flex; gap:5px;">
-                            <button id="btn-calibration-record"
-                                style="flex:1;padding:5px;background:#440000;color:#ffaaaa;border:1px solid #ff4444;border-radius:5px;cursor:pointer;font-size:10px;">Record
-                                Sweep</button>
-                            <button id="btn-calibration-stop"
-                                style="flex:1;padding:5px;background:#444444;color:#aaaaaa;border:1px solid #888888;border-radius:5px;cursor:pointer;font-size:10px;">Stop</button>
-                        </div>
-                        <button id="btn-calibration-save" disabled
-                            style="width:100%;margin-top:5px;padding:5px;background:#004400;color:#aaffaa;border:1px solid #00ff00;border-radius:5px;cursor:pointer;font-size:10px;opacity:0.5;">Save
-                            Profile</button>
-                        <div id="calibration-status-text"
-                            style="color:yellow;font-size:9px;margin-top:2px;text-align:center;min-height:12px;"></div>
-                    </div>
-                    <div style="display:flex; gap: 5px; align-items: center;">
-                        <select id="calibration-profile"
-                            style="flex-grow:1;padding:5px;background:#002222;color:#00ffff;border:1px solid #00ffff;border-radius:5px;font-size:10px;">
-                            <option value="">No Profile Loaded</option>
+
+                <div class="sound-control" style="margin-top:10px; border-top: 1px solid #004444; padding-top: 10px;">
+                    <label style="display:block;margin-bottom:5px;font-size:10px;color:#00ffff;">Sound
+                        Personalization</label>
+
+                    <div style="margin-bottom:8px;">
+                        <label style="font-size:9px;color:#aaa;">Gate Sound Style</label>
+                        <select id="gate-sound-style"
+                            style="width:100%;padding:4px;background:#002222;color:#00ffff;border:1px solid #00ffff;border-radius:3px;font-size:10px;">
+                            <option value="digital">Digital (FM Blip)</option>
+                            <option value="crystalline">Crystalline (Sine)</option>
+                            <option value="organic">Organic (Soft)</option>
                         </select>
                     </div>
+
+                    <div style="margin-bottom:8px;">
+                        <label style="font-size:9px;color:#aaa;">Entanglement Style</label>
+                        <select id="entanglement-style"
+                            style="width:100%;padding:4px;background:#002222;color:#00ffff;border:1px solid #00ffff;border-radius:3px;font-size:10px;">
+                            <option value="drone">Deep Drone</option>
+                            <option value="vibrant">Vibrant Pulse</option>
+                            <option value="shimmer">Ethereal Shimmer</option>
+                        </select>
+                    </div>
+
+                    <div style="margin-bottom:8px;">
+                        <label style="font-size:9px;color:#aaa;">Collapse/Measure Sound</label>
+                        <select id="collapse-style"
+                            style="width:100%;padding:4px;background:#002222;color:#00ffff;border:1px solid #00ffff;border-radius:3px;font-size:10px;">
+                            <option value="thud">Deep Thud (Recommended)</option>
+                            <option value="glass">Glass Break</option>
+                            <option value="static">Radio Static (Noisy)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="sound-control" style="margin-top:15px; border-top: 1px solid #004444; padding-top: 15px;">
+                    <label style="display:block;margin-bottom:5px;font-size:10px;color:#00ffff;">🛡️ Smart Adaptive
+                        Cancellation</label>
+                    <div id="calibration-status-text" style="color:#00ff00;font-size:9px;text-align:center;">Real-Time
+                        Echo Suppression Active</div>
                 </div>
             </div>
         </div>
@@ -164,7 +171,7 @@
                 </div>
                 <!-- Godrays Toggle -->
                 <div class="shader-toggle">
-                    <label><input type="checkbox" id="toggle-godrays" checked> Godrays (Collapse)</label>
+                    <label><input type="checkbox" id="toggle-godrays"> Godrays (Collapse)</label>
                 </div>
             </div>
         </div>
@@ -237,10 +244,6 @@
 
     </div>
 
-    <div id="info">
-        <div>Quantum Circuit Visualization</div>
-        <div id="state-info"></div>
-    </div>
 
     <div id="view-controls">
         <button id="toggle-ui">Hide UI</button>

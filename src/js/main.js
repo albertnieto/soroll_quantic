@@ -3,11 +3,13 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+// import { GodraysPass } from './GodraysPass.js'; // [REMOVED] Causing WebGL errors
+import { VolumetricLightMesh } from './VolumetricLightMesh.js'; // [NEW] Volumetric Mesh
 
-console.log("%c GODRAYS VERSION 1002 LOADED - FIX APPLIED ", "background: #00ffff; color: #000; font-weight: bold;");
+console.log("%c GODRAYS VERSION 2000 LOADED - VOLUMETRIC ", "background: #00ffff; color: #000; font-weight: bold;");
 
 import { Qubit } from './Qubit.js';
-import { plasmaVertexShader, plasmaFragmentShader, qubitVertexShader, qubitFragmentShader, godraysVertexShader, godraysFragmentShader } from './shaders.js';
+import { plasmaVertexShader, plasmaFragmentShader, qubitVertexShader, qubitFragmentShader } from './shaders.js';
 import { particleVertexShader, particleFragmentShader } from './advanced_shaders.js';
 import { blackHoleBillboardVertexShader, blackHoleBillboardFragmentShader, lensingFsQuadShader } from './black_hole_shader.js';
 import { QuantumCircuit } from './quantum_circuit.js';
@@ -25,12 +27,107 @@ camera.position.set(0, 5, 20);
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(window.devicePixelRatio);
+renderer.shadowMap.enabled = true; // [NEW] Enable Shadows
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.getElementById('canvas').appendChild(renderer.domElement);
 
+// --- Godrays Light Source ---
+// --- Godrays Light Source ---
+// USER REQUEST: Behind a qubit, projecting light THROUGH it (Point Light for Starburst effect)
+// Testing on Qubit 3 (Index 2) at approx (4.25, 0, 0)
+const godraysLight = new THREE.PointLight(0xffaa44, 1.0, 100);
+godraysLight.position.set(4.25, 0, -5); // Directly behind Qubit 3, closer
+godraysLight.castShadow = true;
+godraysLight.shadow.mapSize.width = 1024;
+godraysLight.shadow.mapSize.height = 1024;
+godraysLight.shadow.camera.near = 0.1;
+godraysLight.shadow.camera.far = 100;
+godraysLight.shadow.bias = -0.0001;
+scene.add(godraysLight);
+// PointLights do not have a target property.
+
+// Use a helper to visualize light (Optional, for debugging)
+// const helper = new THREE.CameraHelper( godraysLight.shadow.camera );
+// scene.add( helper );
+
+// [NEW] Volumetric Light Mesh (Persistent Godrays)
+// Size: 50 (Width), Color: 0xffaa44
+const qubitGodRays = [];
+const qubitPositionsForRays = [
+    new THREE.Vector3(-12.75, 0, -2), // Qubit 0 (Behind)
+    new THREE.Vector3(-4.25, 0, -2),  // Qubit 1
+    new THREE.Vector3(4.25, 0, -2),   // Qubit 2
+    new THREE.Vector3(12.75, 0, -2)   // Qubit 3
+];
+
+qubitPositionsForRays.forEach((pos, i) => {
+    // Cone: Size 2 (Radius), Height ~4.
+    const mesh = new VolumetricLightMesh(3, 0xffaa44);
+    mesh.position.copy(pos);
+    mesh.material.uniforms.uDensity.value = 0.0;
+    mesh.visible = false; // [NEW] Strictly invisible start
+    scene.add(mesh);
+    qubitGodRays.push(mesh);
+});
+
+// Animation Helper
+function triggerGodRay(index, duration = 2.0, intensity = 2.0) {
+    if (!qubitGodRays[index]) return;
+
+    console.log(`Triggering God Ray for Qubit ${index}`);
+
+    const mesh = qubitGodRays[index];
+    if (mesh) mesh.visible = true; // Show on trigger
+
+    const startTime = performance.now();
+
+    const animateRay = () => {
+        const now = performance.now();
+        const elapsed = (now - startTime) / 1000;
+        const progress = Math.min(elapsed / duration, 1.0);
+
+        // Emerge (Fast In) and Contract (Slow Out)
+        let val = 0;
+        if (progress < 0.1) { // Faster attack (10%)
+            val = progress / 0.1;
+            val = Math.pow(val, 0.5); // Ease Out Quad
+        } else {
+            const p = (progress - 0.1) / 0.9;
+            val = 1.0 - p;
+            val = Math.pow(val, 2.0); // Ease In Quad Decay
+        }
+
+        mesh.material.uniforms.uDensity.value = val * intensity;
+
+        if (progress < 1.0) {
+            requestAnimationFrame(animateRay);
+        } else {
+            mesh.material.uniforms.uDensity.value = 0.0;
+            mesh.visible = false; // Hide after animation
+        }
+    };
+
+    requestAnimationFrame(animateRay);
+}
+
 // --- Post Processing Setup ---
-const composer = new EffectComposer(renderer);
+// Configure Composer to use Depth Texture (Required for Godrays)
+const renderTarget = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight, {
+    minFilter: THREE.LinearFilter,
+    magFilter: THREE.LinearFilter,
+    format: THREE.RGBAFormat,
+    type: THREE.HalfFloatType
+});
+renderTarget.depthTexture = new THREE.DepthTexture();
+renderTarget.depthTexture.format = THREE.DepthFormat;
+renderTarget.depthTexture.type = THREE.UnsignedIntType;
+
+const composer = new EffectComposer(renderer, renderTarget);
 const renderPass = new RenderPass(scene, camera);
 composer.addPass(renderPass);
+
+// [REMOVED] GodraysPass - Replaced by VolumetricLightMesh
+// const godraysPass = new GodraysPass(...)
 
 const lensingPass = new ShaderPass(lensingFsQuadShader);
 lensingPass.uniforms.uResolution.value.set(window.innerWidth, window.innerHeight);
@@ -43,7 +140,7 @@ controls.enableDamping = true;
 let qubitSpacing = 8.5;
 const qubits = [];
 const qubitMeshes = [];
-const godrayMeshes = []; // [NEW] Godray Meshes
+// const godrayMeshes = []; // [REMOVED] Old billboard meshes
 const qubitCloudMeshes = []; // Stores { state0, state1 } for each qubit
 const particleSystem = { mesh: null, uniforms: null };
 const quantumCircuit = new QuantumCircuit();
@@ -163,7 +260,7 @@ function createQubitSphere(position, index) {
         // Changed to NormalBlending so the Qubit occludes the background particles.
         // This solves "seeing particles in front and behind".
         blending: THREE.NormalBlending,
-        depthWrite: false // We clear depth anyway, so this is fine, but NormalBlending needs alpha channel.
+        depthWrite: true // CRITICAL: Must write depth for Godrays to be occluded!
     });
 
     const mesh = new THREE.Mesh(geometry, material);
@@ -200,6 +297,9 @@ function createQubitSphere(position, index) {
         child.layers.set(1);
     });
 
+    mesh.castShadow = true; // [NEW] Cast Shadows for Godrays
+    mesh.receiveShadow = true;
+
     scene.add(mesh);
     qubitMeshes.push(mesh);
 
@@ -223,32 +323,7 @@ function createQubitSphere(position, index) {
 
     qubitCloudMeshes.push({ state0: cloud0, state1: cloud1 });
 
-    const godrayGeometry = new THREE.PlaneGeometry(25, 25);
-    const godrayMaterial = new THREE.ShaderMaterial({
-        vertexShader: godraysVertexShader,
-        fragmentShader: godraysFragmentShader,
-        uniforms: {
-            uTime: { value: 0 },
-            uColor: { value: new THREE.Color(0xffaa44) },
-            uOpacity: { value: 0.0 }
-        },
-        transparent: true,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending,
-        side: THREE.DoubleSide
-    });
-
-    const godrayMesh = new THREE.Mesh(godrayGeometry, godrayMaterial);
-    godrayMesh.position.copy(position);
-    godrayMesh.visible = false;
-
-    godrayMesh.layers.enable(0);
-    godrayMesh.layers.enable(1);
-
-    godrayMesh.renderOrder = -10;
-
-    scene.add(godrayMesh);
-    godrayMeshes.push(godrayMesh);
+    // [REMOVED] Old Godray Billboards
 }
 
 
@@ -448,6 +523,7 @@ for (let i = 0; i < 4; i++) {
         if (value > THRESHOLD_LIMIT && qubits[i].coherent) {
             indicator.classList.add('breach');
             qubits[i].collapse(Math.random() > 0.5 ? 1 : 0);
+            if (quantumSound.enabled) quantumSound.playCollapseSound();
         } else {
             indicator.classList.remove('breach');
         }
@@ -555,6 +631,7 @@ function executeNextGate() {
             });
         }
         updateQuantumStateDisplay();
+        if (quantumSound.enabled) quantumSound.playGateSound();
         return true;
     } else {
         quantumCircuit.reset();
@@ -605,7 +682,7 @@ let shadersEnabled = {
     lensing: true,
     einstein: false, // Default false
     bloom: true,
-    godrays: true // [NEW] Default Enabled
+    godrays: false // [NEW] Disabled by default
 };
 
 document.getElementById('toggle-plasma').addEventListener('change', (e) => {
@@ -644,6 +721,7 @@ document.getElementById('toggle-entanglement').addEventListener('change', (e) =>
 // [NEW] Godrays Toggle
 document.getElementById('toggle-godrays').addEventListener('change', (e) => {
     shadersEnabled.godrays = e.target.checked;
+    // No GodraysPass to toggle anymore
 });
 
 document.getElementById('toggle-orbital').addEventListener('change', (e) => {
@@ -685,9 +763,10 @@ document.getElementById('toggle-edge-mask').addEventListener('change', (e) => {
 // Initialize mask state
 updateEdgeMask();
 
-document.getElementById('toggle-sound').addEventListener('change', async (e) => {
+document.getElementById('start-sound').addEventListener('click', async (e) => {
     const enabled = await quantumSound.toggle();
-    e.target.checked = enabled;
+    e.target.textContent = enabled ? 'Stop Quantum Sound' : 'Start Quantum Sound';
+    e.target.style.background = enabled ? '#440022' : '#004444';
 });
 
 document.getElementById('sound-volume').addEventListener('input', (e) => {
@@ -720,128 +799,20 @@ document.getElementById('sound-resonance').addEventListener('input', (e) => {
     quantumSound.setResonance(value);
 });
 
-document.getElementById('sound-mode').addEventListener('change', (e) => {
-    quantumSound.setMode(e.target.value);
+document.getElementById('gate-sound-style').addEventListener('change', (e) => {
+    quantumSound.setStyle('gate', e.target.value);
+});
+
+document.getElementById('entanglement-style').addEventListener('change', (e) => {
+    quantumSound.setStyle('entanglement', e.target.value);
+});
+
+document.getElementById('collapse-style').addEventListener('change', (e) => {
+    quantumSound.setStyle('collapse', e.target.value);
 });
 
 // --- Tuning & Calibration Logic ---
-async function refreshCalibrationProfiles() {
-    const profiles = await quantumSound.listCalibrations();
-    const select = document.getElementById('calibration-profile');
-    const currentValue = select.value;
-
-    select.innerHTML = '<option value="">No Profile Loaded</option>';
-    profiles.forEach(name => {
-        const option = document.createElement('option');
-        option.value = name;
-        option.text = name.replace(/_/g, ' ');
-        select.appendChild(option);
-    });
-
-    if (currentValue) select.value = currentValue;
-}
-
-// Safe Log to status without spamming
-function safeLog(message) {
-    const status = document.getElementById('calibration-status-text');
-    if (status && status.textContent !== message) {
-        status.textContent = message;
-        console.log("[UI Log] " + message);
-    }
-}
-
-let currentCalibrationMask = null;
-
-document.getElementById('btn-calibration-record').addEventListener('click', async () => {
-    const status = document.getElementById('calibration-status-text');
-    const btnRec = document.getElementById('btn-calibration-record');
-    const btnSave = document.getElementById('btn-calibration-save');
-
-    // Reset state
-    currentCalibrationMask = null;
-    btnSave.disabled = true;
-    btnSave.style.opacity = "0.5";
-
-    safeLog("CALIBRATING... PLEASE BE SILENT");
-    btnRec.disabled = true;
-    btnRec.textContent = "Running...";
-    btnRec.style.background = "#220000";
-
-    try {
-        const result = await quantumSound.runCalibrationSweep(micManager);
-
-        // Handle Error Objects
-        if (result && result.error) {
-            safeLog(result.error);
-            currentCalibrationMask = null;
-        } else if (result) { // Success (returns mask array)
-            currentCalibrationMask = result;
-            safeLog("Sweep Complete. Enter Name & Save.");
-            btnSave.disabled = false;
-            btnSave.style.opacity = "1";
-        } else {
-            safeLog("Calibration Cancelled (Unknown Error).");
-        }
-    } catch (e) {
-        console.error(e);
-        safeLog("Error: " + e.message);
-    } finally {
-        btnRec.disabled = false;
-        btnRec.textContent = "Record Sweep";
-        btnRec.style.background = "#440000";
-    }
-});
-
-document.getElementById('btn-calibration-stop').addEventListener('click', () => {
-    if (quantumSound.isCalibrating) {
-        quantumSound.stopCalibrationSweep();
-        document.getElementById('calibration-status-text').textContent = "Stopping...";
-    }
-});
-
-document.getElementById('btn-calibration-save').addEventListener('click', async () => {
-    const nameInput = document.getElementById('calibration-name-input');
-    const status = document.getElementById('calibration-status-text');
-    const name = nameInput.value.trim();
-
-    if (!name) {
-        status.textContent = "Error: Please enter a name first.";
-        // Highlight input
-        nameInput.style.borderColor = "red";
-        setTimeout(() => nameInput.style.borderColor = "#00ffff", 2000);
-        return;
-    }
-
-    if (!currentCalibrationMask) {
-        status.textContent = "Error: No calibration data.";
-        return;
-    }
-
-    status.textContent = "Saving...";
-    const success = await quantumSound.saveCalibration(name, currentCalibrationMask);
-
-    if (success) {
-        status.textContent = "Saved: " + name;
-        await refreshCalibrationProfiles();
-        document.getElementById('calibration-profile').value = name;
-        // Auto-load the saved profile
-        await quantumSound.loadCalibration(name, micManager);
-    } else {
-        status.textContent = "Save Failed (Server Error).";
-    }
-});
-
-document.getElementById('calibration-profile').addEventListener('change', async (e) => {
-    const name = e.target.value;
-    if (name) {
-        await quantumSound.loadCalibration(name, micManager);
-    } else {
-        micManager.calibrationMask = null; // Clear mask
-    }
-});
-
-// Initialize Profile List
-refreshCalibrationProfiles();
+// --- Real-Time Adaptive Acoustic Cancellation is now fully automated in the animation loop ---
 
 async function refreshMicList() {
     const devices = await micManager.getDevices();
@@ -865,18 +836,24 @@ async function refreshMicList() {
 
 
 async function startMic() {
+    const btn = document.getElementById('start-mic');
+
+    if (micManager.enabled) {
+        // STOP MIC
+        await micManager.stop();
+        btn.textContent = 'Start Live Mic';
+        btn.style.background = '#004444';
+        return;
+    }
+
+    // START MIC
     const deviceId = document.getElementById('mic-device').value;
     await micManager.init(deviceId);
 
     await refreshMicList();
 
-    const btn = document.getElementById('start-mic');
-    btn.textContent = micManager.enabled ? 'Live Mic Active' : 'Retry Mic';
-    btn.style.background = micManager.enabled ? '#007777' : '#440000';
-
-    if (micManager.enabled && quantumSound.mode === 'interactive') {
-        quantumSound.startMicProcessing(micManager.getSource());
-    }
+    btn.textContent = micManager.enabled ? 'Stop Live Mic' : 'Retry Mic';
+    btn.style.background = micManager.enabled ? '#770000' : '#440000';
 }
 
 document.getElementById('start-mic').addEventListener('click', startMic);
@@ -1099,15 +1076,29 @@ function animate() {
         updateQuantumStateDisplay();
     }
 
+    // [NEW] Update Volumetric Meshes
+    qubitGodRays.forEach(mesh => {
+        if (mesh) {
+            mesh.update(time, camera);
+            mesh.lookAt(camera.position);
+            // Since Cone points +Z (local), looking at camera points base to camera?
+            // Cone geometry setup: Tip at 0, Pointing +Z.
+            // LookAt aligns +Z to target. So Tip points to Camera.
+            // Wait, God Rays come FROM source TO camera.
+            // If Tip is source (Qubit), then Tip -> Camera is correct direction.
+            // Rays expand as they get closer.
+            // Yes.
+        }
+    });
+
     // Audio Processing
     if (micManager.enabled) {
         micManager.update();
 
-        // Single energy source from the mixed input
+        // Single energy source from the mixed input (with noise gate)
         const globalEnergy = micManager.getEnergy();
 
         // Randomly target a qubit to apply this energy to
-        // We change the target every few frames to make it look active but not chaotic
         const now = Date.now();
         if (!window.lastMicTargetTime || now - window.lastMicTargetTime > 100) {
             window.micTargetIndex = Math.floor(Math.random() * 4);
@@ -1118,8 +1109,6 @@ function animate() {
             // Only apply energy to the random target
             const energy = (i === window.micTargetIndex) ? globalEnergy : 0;
 
-            // Smooth decay for non-active qubits so they don't snap to 0
-            // If it's the target, use the real energy. If not, decay existing value.
             if (i === window.micTargetIndex) {
                 micThresholds[i] = energy;
             } else {
@@ -1138,21 +1127,19 @@ function animate() {
                 if (indicatorEl) indicatorEl.classList.add('breach');
                 qubits[i].collapse(Math.random() > 0.5 ? 1 : 0);
 
+                // Global Entanglement Cleanup: Remove THIS qubit from all other qubits' lists
+                qubits.forEach(otherQubit => {
+                    if (otherQubit.id !== i) {
+                        otherQubit.entangledWith = otherQubit.entangledWith.filter(linkedId => linkedId !== i);
+                    }
+                });
+
                 // [NEW] Trigger Godrays & Sound
                 if (quantumSound.enabled) quantumSound.playGodRaySound();
 
                 // Trigger Visual
                 if (shadersEnabled.godrays) {
-                    const gMesh = godrayMeshes[i];
-                    if (gMesh) {
-                        gMesh.visible = true;
-                        if (gMesh.material.uniforms) {
-                            gMesh.material.uniforms.uOpacity.value = 1.0;
-                            gMesh.material.uniforms.uTime.value = 0.0;
-                            // Randomize color slightly?
-                            gMesh.material.uniforms.uColor.value.setHSL(0.1 + Math.random() * 0.1, 1.0, 0.5);
-                        }
-                    }
+                    triggerGodRay(i, 2.5, 4.0); // Index i, Duration 2.5s, Intensity 4.0
                 }
 
             } else if (indicatorEl) {
@@ -1161,27 +1148,7 @@ function animate() {
         }
     }
 
-    // [NEW] Animate Godrays
-    godrayMeshes.forEach(mesh => {
-        if (!mesh.visible) return;
-
-        if (mesh.material.uniforms) {
-            mesh.lookAt(camera.position); // Billboard effect
-            mesh.material.uniforms.uTime.value += 0.05;
-
-            // Decay opacity
-            const currentOp = mesh.material.uniforms.uOpacity.value;
-            if (currentOp > 0.01) {
-                mesh.material.uniforms.uOpacity.value -= 0.015; // Fade over ~60 frames
-                // Expand slightly
-                mesh.scale.multiplyScalar(1.005);
-            } else {
-                mesh.visible = false;
-                mesh.material.uniforms.uOpacity.value = 0.0;
-                mesh.scale.set(1, 1, 1); // Reset scale
-            }
-        }
-    });
+    // [REMOVED] Animate Godrays loop (Handled by shader now)
 
     quantumSound.update(qubits);
 
@@ -1204,28 +1171,36 @@ function animate() {
     camera.layers.enableAll();
 }
 
-// [debug] Godrays Initialization
-if (godrayMeshes.length > 0 && time < 0.1) {
-    console.log("Godrays Initialized. Count:", godrayMeshes.length);
-}
 
 animate();
 
 window.addEventListener('keydown', (e) => {
     if (e.key === 'g' || e.key === 'G') {
-        console.log("Manual Godray Trigger on Qubit 0");
-        const gMesh = godrayMeshes[0];
-        if (gMesh) {
-            gMesh.visible = true;
-            if (gMesh.material.uniforms) {
-                gMesh.material.uniforms.uOpacity.value = 1.0;
-                gMesh.material.uniforms.uTime.value = 0.0;
-                gMesh.material.uniforms.uColor.value.setHex(0xffaa00);
+        const coherentIndices = qubits.map((q, i) => q.coherent ? i : -1).filter(i => i !== -1);
+        if (coherentIndices.length === 0) return;
+
+        const i = coherentIndices[Math.floor(Math.random() * coherentIndices.length)];
+
+        console.warn(`MANUAL DECOHERENCE TRIGGERED ON QUBIT ${i}`);
+
+        qubits[i].collapse(Math.random() > 0.5 ? 1 : 0);
+
+        // Global Entanglement Cleanup
+        qubits.forEach(otherQubit => {
+            if (otherQubit.id !== i) {
+                otherQubit.entangledWith = otherQubit.entangledWith.filter(linkedId => linkedId !== i);
             }
-        }
+        });
+
         if (quantumSound.enabled) quantumSound.playGodRaySound();
+
+        // Trigger Visual
+        if (shadersEnabled.godrays) {
+            triggerGodRay(i, 2.5, 4.0);
+        }
     }
 });
+
 
 window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
