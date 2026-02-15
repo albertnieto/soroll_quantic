@@ -413,7 +413,7 @@ function runRandomQuantumLoop() {
         // Priority: Revive a collapsed qubit
         targetQubit = collapsedQubits[Math.floor(Math.random() * collapsedQubits.length)];
         // Revive it!
-        targetQubit.coherent = true; 
+        targetQubit.coherent = true;
         targetQubit.alpha = Math.cos(Math.random() * Math.PI);
         targetQubit.beta = Math.sin(Math.random() * Math.PI);
         targetQubit.phase = Math.random() * Math.PI * 2;
@@ -426,7 +426,7 @@ function runRandomQuantumLoop() {
 
         switch (randomGate) {
             case 'H':
-                 // Simple random rotation approach for better visuals:
+                // Simple random rotation approach for better visuals:
                 targetQubit.alpha = Math.cos(Math.random() * Math.PI);
                 targetQubit.beta = Math.sin(Math.random() * Math.PI);
                 targetQubit.phase += (Math.random() - 0.5) * 0.5;
@@ -434,31 +434,31 @@ function runRandomQuantumLoop() {
             case 'RX':
             case 'RY':
             case 'RZ':
-                 // Small random rotations
-                 const angle = (Math.random() - 0.5) * 1.0;
-                 if (randomGate === 'RX') {
+                // Small random rotations
+                const angle = (Math.random() - 0.5) * 1.0;
+                if (randomGate === 'RX') {
                     const cos = Math.cos(angle / 2);
                     const sin = Math.sin(angle / 2);
                     const a = targetQubit.alpha;
                     const b = targetQubit.beta;
                     targetQubit.alpha = a * cos - b * sin;
                     targetQubit.beta = b * cos + a * sin;
-                 } else if (randomGate === 'RY') {
+                } else if (randomGate === 'RY') {
                     const cos = Math.cos(angle / 2);
                     const sin = Math.sin(angle / 2);
                     const a = targetQubit.alpha;
                     const b = targetQubit.beta;
                     targetQubit.alpha = cos * a - sin * b;
                     targetQubit.beta = sin * a + cos * b;
-                 } else {
+                } else {
                     targetQubit.phase += angle;
-                 }
+                }
                 break;
             default:
                 // Random unitary
-                 targetQubit.alpha = Math.cos(Math.random() * Math.PI);
-                 targetQubit.beta = Math.sin(Math.random() * Math.PI);
-                 targetQubit.phase += (Math.random() - 0.5);
+                targetQubit.alpha = Math.cos(Math.random() * Math.PI);
+                targetQubit.beta = Math.sin(Math.random() * Math.PI);
+                targetQubit.phase += (Math.random() - 0.5);
                 break;
         }
     }
@@ -1246,7 +1246,21 @@ function animate() {
         // Randomly target a qubit to apply this energy to
         const now = Date.now();
         if (!window.lastMicTargetTime || now - window.lastMicTargetTime > 100) {
-            window.micTargetIndex = Math.floor(Math.random() * 4);
+            if (currentMode === 'random_quantum') {
+                // [NEW] Smart Targeting: Prioritize Coherent Qubits
+                // "never a qubit that is decoherenced while theres still an active one"
+                const coherentIndices = qubits.map((q, i) => q.coherent ? i : -1).filter(i => i !== -1);
+
+                if (coherentIndices.length > 0) {
+                    window.micTargetIndex = coherentIndices[Math.floor(Math.random() * coherentIndices.length)];
+                } else {
+                    // All collapsed? Fallback to random (or waiting for revival)
+                    window.micTargetIndex = Math.floor(Math.random() * 4);
+                }
+            } else {
+                // Standard Random Targeting
+                window.micTargetIndex = Math.floor(Math.random() * 4);
+            }
             window.lastMicTargetTime = now;
         }
 
@@ -1270,21 +1284,53 @@ function animate() {
 
             if (micThresholds[i] > THRESHOLD_LIMIT && qubits[i].coherent) {
                 if (indicatorEl) indicatorEl.classList.add('breach');
-                qubits[i].collapse(Math.random() > 0.5 ? 1 : 0);
 
-                // Global Entanglement Cleanup: Remove THIS qubit from all other qubits' lists
-                qubits.forEach(otherQubit => {
-                    if (otherQubit.id !== i) {
-                        otherQubit.entangledWith = otherQubit.entangledWith.filter(linkedId => linkedId !== i);
+                if (currentMode === 'random_quantum') {
+                    // [FIX] Random Mode Logic: Strict Collapse to 1 & Single Qubit Rule
+                    if (!isRandomModeCollapsed) {
+                        isRandomModeCollapsed = true;
+                        // Short debounce to prevent multiple simultaneous collapses
+                        setTimeout(() => { isRandomModeCollapsed = false; }, 200);
+
+                        qubits[i].collapse(1); // ALWAYS state 1
+
+                        // Check if this was the last coherent qubit
+                        const coherentCount = qubits.filter(q => q.coherent).length;
+                        if (coherentCount === 0) {
+                            // Schedule revival of a random qubit to keep the loop going
+                            setTimeout(() => {
+                                const collapsedQubits = qubits.filter(q => !q.coherent);
+                                if (collapsedQubits.length > 0) {
+                                    const randomRevive = collapsedQubits[Math.floor(Math.random() * collapsedQubits.length)];
+                                    randomRevive.coherent = true;
+                                    randomRevive.alpha = Math.cos(Math.random() * Math.PI);
+                                    randomRevive.beta = Math.sin(Math.random() * Math.PI);
+                                    randomRevive.phase = Math.random() * Math.PI * 2;
+                                    updateQuantumStateDisplay();
+                                }
+                            }, 500);
+                        }
                     }
-                });
+                } else {
+                    // Standard Logic: Random 0 or 1
+                    qubits[i].collapse(Math.random() > 0.5 ? 1 : 0);
+                }
 
-                // [NEW] Trigger Godrays & Sound
-                if (quantumSound.enabled) quantumSound.playGodRaySound();
+                if (!qubits[i].coherent) { // If collapse happened (it might not have if locked in random mode)
+                    // Global Entanglement Cleanup: Remove THIS qubit from all other qubits' lists
+                    qubits.forEach(otherQubit => {
+                        if (otherQubit.id !== i) {
+                            otherQubit.entangledWith = otherQubit.entangledWith.filter(linkedId => linkedId !== i);
+                        }
+                    });
 
-                // Trigger Visual
-                if (shadersEnabled.godrays) {
-                    triggerGodRay(i, 2.5, 4.0); // Index i, Duration 2.5s, Intensity 4.0
+                    // [NEW] Trigger Godrays & Sound
+                    if (quantumSound.enabled) quantumSound.playGodRaySound();
+
+                    // Trigger Visual
+                    if (shadersEnabled.godrays) {
+                        triggerGodRay(i, 2.5, 4.0); // Index i, Duration 2.5s, Intensity 4.0
+                    }
                 }
 
             } else if (indicatorEl) {
