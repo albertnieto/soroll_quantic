@@ -397,7 +397,90 @@ document.getElementById('auto-execute').addEventListener('click', () => {
     }
 });
 
-let currentMode = 'manual';
+let currentMode = 'random_quantum';
+let randomModeInterval = null;
+let isRandomModeCollapsed = false; // Lock to ensure only one qubit collapses at a time via sound
+
+function runRandomQuantumLoop() {
+    if (currentMode !== 'random_quantum') return;
+
+    // Priority Rule: "qubits that are decoherenced have priority always over those that are coherent"
+    const collapsedQubits = qubits.filter(q => !q.coherent);
+    const coherentQubits = qubits.filter(q => q.coherent);
+    let targetQubit = null;
+
+    if (collapsedQubits.length > 0) {
+        // Priority: Revive a collapsed qubit
+        targetQubit = collapsedQubits[Math.floor(Math.random() * collapsedQubits.length)];
+        // Revive it!
+        targetQubit.coherent = true; 
+        targetQubit.alpha = Math.cos(Math.random() * Math.PI);
+        targetQubit.beta = Math.sin(Math.random() * Math.PI);
+        targetQubit.phase = Math.random() * Math.PI * 2;
+        // console.log(`Random Mode: REVIVING Qubit ${targetQubit.id}`);
+    } else if (coherentQubits.length > 0) {
+        // Fallback: Modify a coherent qubit
+        targetQubit = coherentQubits[Math.floor(Math.random() * coherentQubits.length)];
+        const gates = ['H', 'X', 'Y', 'Z', 'RX', 'RY', 'RZ']; // Basic single qubit gates - NO CNOTs
+        const randomGate = gates[Math.floor(Math.random() * gates.length)];
+
+        switch (randomGate) {
+            case 'H':
+                 // Simple random rotation approach for better visuals:
+                targetQubit.alpha = Math.cos(Math.random() * Math.PI);
+                targetQubit.beta = Math.sin(Math.random() * Math.PI);
+                targetQubit.phase += (Math.random() - 0.5) * 0.5;
+                break;
+            case 'RX':
+            case 'RY':
+            case 'RZ':
+                 // Small random rotations
+                 const angle = (Math.random() - 0.5) * 1.0;
+                 if (randomGate === 'RX') {
+                    const cos = Math.cos(angle / 2);
+                    const sin = Math.sin(angle / 2);
+                    const a = targetQubit.alpha;
+                    const b = targetQubit.beta;
+                    targetQubit.alpha = a * cos - b * sin;
+                    targetQubit.beta = b * cos + a * sin;
+                 } else if (randomGate === 'RY') {
+                    const cos = Math.cos(angle / 2);
+                    const sin = Math.sin(angle / 2);
+                    const a = targetQubit.alpha;
+                    const b = targetQubit.beta;
+                    targetQubit.alpha = cos * a - sin * b;
+                    targetQubit.beta = sin * a + cos * b;
+                 } else {
+                    targetQubit.phase += angle;
+                 }
+                break;
+            default:
+                // Random unitary
+                 targetQubit.alpha = Math.cos(Math.random() * Math.PI);
+                 targetQubit.beta = Math.sin(Math.random() * Math.PI);
+                 targetQubit.phase += (Math.random() - 0.5);
+                break;
+        }
+    }
+
+    if (targetQubit) {
+        updateQuantumStateDisplay();
+    }
+
+    // Schedule next weird gate
+    // Use user-defined autoStepDelay
+    if (currentMode === 'random_quantum') {
+        randomModeInterval = setTimeout(runRandomQuantumLoop, autoStepDelay);
+    }
+}
+
+
+// Start immediately if default
+if (currentMode === 'random_quantum') {
+    document.getElementById('manual-controls').style.display = 'none';
+    document.getElementById('circuit-mode-controls').style.display = 'none';
+    runRandomQuantumLoop();
+}
 
 const circuitModeSelect = document.getElementById('circuit-mode');
 circuitModeSelect.addEventListener('change', (e) => {
@@ -407,8 +490,13 @@ circuitModeSelect.addEventListener('change', (e) => {
         document.getElementById('manual-controls').style.display = 'none';
         document.getElementById('circuit-mode-controls').style.display = 'none';
     } else if (currentMode === 'manual') {
+        clearTimeout(randomModeInterval);
         document.getElementById('manual-controls').style.display = 'block';
         document.getElementById('circuit-mode-controls').style.display = 'none';
+    } else if (currentMode === 'random_quantum') {
+        document.getElementById('manual-controls').style.display = 'none';
+        document.getElementById('circuit-mode-controls').style.display = 'none';
+        runRandomQuantumLoop();
     } else {
         document.getElementById('manual-controls').style.display = 'none';
         document.getElementById('circuit-mode-controls').style.display = 'block';
@@ -522,8 +610,50 @@ for (let i = 0; i < 4; i++) {
 
         if (value > THRESHOLD_LIMIT && qubits[i].coherent) {
             indicator.classList.add('breach');
-            qubits[i].collapse(Math.random() > 0.5 ? 1 : 0);
-            if (quantumSound.enabled) quantumSound.playCollapseSound();
+
+            if (currentMode === 'random_quantum') {
+                // Special Random Mode Logic
+                // STRICT RULE: "when sound activates decoherence it can only decoherence one qubit at a time"
+                // STRICT RULE: "collapsed state will always be 1"
+                // This means if multiple breach, only one should succeed?
+                // Or does it mean "one trigger event handles one qubit"?
+                // Let's assume we need a lock if multiple mics breach simultaneously.
+
+                if (!isRandomModeCollapsed) {
+                    isRandomModeCollapsed = true;
+                    setTimeout(() => { isRandomModeCollapsed = false; }, 200); // Short debounce lock
+
+                    // "collapsed state will always be 1"
+                    qubits[i].collapse(1);
+                    if (quantumSound.enabled) quantumSound.playCollapseSound();
+
+                    // "if the last qubit that is not collapsed is triggered by sound to collapse"
+                    // Check if this was the last coherent one (before this collapse, it was coherent)
+                    // So now, are there any coherent ones left?
+                    const coherentCount = qubits.filter(q => q.coherent).length;
+
+                    if (coherentCount === 0) {
+                        // This was the last one!
+                        // "after 0.5 secs another collapsed random qubit will be applied a random gate"
+                        setTimeout(() => {
+                            const collapsedQubits = qubits.filter(q => !q.coherent);
+                            if (collapsedQubits.length > 0) {
+                                const randomRevive = collapsedQubits[Math.floor(Math.random() * collapsedQubits.length)];
+                                // Apply random gate to revive it
+                                randomRevive.coherent = true;
+                                randomRevive.alpha = Math.cos(Math.random() * Math.PI);
+                                randomRevive.beta = Math.sin(Math.random() * Math.PI);
+                                randomRevive.phase = Math.random() * Math.PI * 2;
+                                updateQuantumStateDisplay();
+                            }
+                        }, 500);
+                    }
+                }
+            } else {
+                // Standard Logic
+                qubits[i].collapse(Math.random() > 0.5 ? 1 : 0);
+                if (quantumSound.enabled) quantumSound.playCollapseSound();
+            }
         } else {
             indicator.classList.remove('breach');
         }
@@ -1198,7 +1328,12 @@ window.addEventListener('keydown', (e) => {
 
         console.warn(`MANUAL DECOHERENCE TRIGGERED ON QUBIT ${i}`);
 
-        qubits[i].collapse(Math.random() > 0.5 ? 1 : 0);
+        if (currentMode === 'random_quantum') {
+            // "when decoherence by noise or press G it will always be state 1"
+            qubits[i].collapse(1);
+        } else {
+            qubits[i].collapse(Math.random() > 0.5 ? 1 : 0);
+        }
 
         // Global Entanglement Cleanup
         qubits.forEach(otherQubit => {

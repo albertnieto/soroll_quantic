@@ -189,13 +189,20 @@
             <div class="panel-content">
                 <select id="circuit-mode"
                     style="width:100%;padding:6px;margin:10px 0;background:#002222;color:#00ffff;border:1px solid #00ffff;border-radius:5px;font-size:11px;">
-                    <option value="" selected>Select Circuit...</option>
+                    <option value="">Select Circuit...</option>
+                    <option value="random_quantum" selected>Random Quantum Mode</option>
                     <option value="manual">Manual Control</option>
                     <option value="bell_state">Bell State</option>
                     <option value="phase_evolution">Phase Evolution</option>
                     <option value="random_rotation">Random Rotation</option>
                     <option value="quantum_chaos">Quantum Chaos</option>
                 </select>
+
+                <div class="sound-control" style="margin: 10px 0; border-top: 1px solid #004444; padding-top: 10px;">
+                    <label>Step Delay (Random/Auto)</label>
+                    <input type="range" id="auto-speed" min="100" max="3000" value="1000" step="100">
+                    <div class="value-display" id="speed-value">1.0s</div>
+                </div>
 
                 <div id="manual-controls" style="display:none;">
                     <div id="manual-qubits"></div>
@@ -209,11 +216,7 @@
                     </div>
                     <div id="current-gate">No gate executed</div>
 
-                    <div class="sound-control" style="margin: 10px 0;">
-                        <label>Step Delay</label>
-                        <input type="range" id="auto-speed" min="100" max="3000" value="1000" step="100">
-                        <div class="value-display" id="speed-value">1.0s</div>
-                    </div>
+
 
                     <div class="shader-toggle" style="margin-bottom: 10px;">
                         <label><input type="checkbox" id="toggle-loop" checked> Loop Circuit</label>
