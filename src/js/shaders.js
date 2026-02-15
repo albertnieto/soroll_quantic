@@ -285,9 +285,10 @@ export const qubitFragmentShader = `
                 plasma = (plasma + 1.0) * 0.5;
                 plasma = pow(plasma, 1.5);
                 
-                vec3 color1 = vec3(0.0, 0.5, 1.0);
-                vec3 color2 = vec3(1.0, 0.1, 0.7);
-                vec3 color3 = vec3(0.0, 1.0, 0.8);
+                // [MODIFIED] Less saturated base colors
+                vec3 color1 = vec3(0.1, 0.4, 0.8); // Was (0.0, 0.5, 1.0)
+                vec3 color2 = vec3(0.8, 0.2, 0.6); // Was (1.0, 0.1, 0.7)
+                vec3 color3 = vec3(0.1, 0.8, 0.7); // Was (0.0, 1.0, 0.8)
                 
                 plasmaColor = mix(color1, color2, plasma);
                 plasmaColor = mix(plasmaColor, color3, noise1 * 0.5 + 0.5);
@@ -306,7 +307,15 @@ export const qubitFragmentShader = `
                 plasmaColor = texture2D(uPlasmaTexture, uv).rgb;
             }
             
-            finalColor = uColor * plasmaColor * 2.5 * (1.0 + fresnel);
+            // [NEW] Saturation Adjustment
+            float luminance = dot(plasmaColor, vec3(0.2126, 0.7152, 0.0722));
+            vec3 grey = vec3(luminance);
+            // Mix towards grey to desaturate (0.0 = grey, 1.0 = original, >1.0 = saturated)
+            // Keeping it slightly desaturated (0.9) to avoid neon look
+            plasmaColor = mix(grey, plasmaColor, 0.85);
+
+            // [MODIFIED] Reduced intensity multiplier from 2.5 to 1.8
+            finalColor = uColor * plasmaColor * 1.8 * (1.0 + fresnel);
         } else {
             finalColor = uColor * (1.0 + fresnel * 0.5);
         }
