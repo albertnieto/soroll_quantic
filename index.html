@@ -28,9 +28,14 @@
                 </div>
                 <div id="edge-mask-controls">
                     <div class="sound-control">
-                        <label>Mask Intensity</label>
-                        <input type="range" id="mask-intensity" min="0" max="100" value="100" step="1">
-                        <div class="value-display" id="maskIntensityValue">100%</div>
+                        <label>Mask Intensity (H / V)</label>
+                        <div style="display: flex; gap: 5px;">
+                            <input type="range" id="mask-intensity-h" min="0" max="100" value="100" step="1"
+                                style="flex:1;">
+                            <input type="range" id="mask-intensity-v" min="0" max="100" value="100" step="1"
+                                style="flex:1;">
+                        </div>
+                        <div class="value-display" id="maskIntensityValue">H:100% V:100%</div>
                     </div>
                     <div class="sound-control">
                         <label>Mask Size</label>
@@ -148,6 +153,16 @@
                 </div>
                 <div class="shader-toggle">
                     <label><input type="checkbox" id="toggle-orbital" checked> Particle System</label>
+                    <div id="particle-controls" style="margin-left: 20px; font-size: 10px;">
+                        <div class="sound-control">
+                            <label>Opacity</label>
+                            <input type="range" id="particle-opacity" min="0" max="100" value="60" step="1">
+                        </div>
+                        <div class="sound-control">
+                            <label>Size</label>
+                            <input type="range" id="particle-size" min="10" max="300" value="100" step="1">
+                        </div>
+                    </div>
                 </div>
                 <div class="shader-toggle">
                     <label><input type="checkbox" id="toggle-entanglement" checked> Mic Ripples</label>
@@ -157,6 +172,17 @@
                 </div>
                 <div class="shader-toggle">
                     <label><input type="checkbox" id="toggle-lensing" checked> Gravitational Lensing</label>
+                    <div id="lensing-controls" style="margin-left: 20px; font-size: 10px;">
+                        <div class="sound-control">
+                            <label>Distortion X / Y</label>
+                            <div style="display: flex; gap: 5px;">
+                                <input type="range" id="lensing-x" min="0" max="300" value="100" step="1"
+                                    style="flex:1;">
+                                <input type="range" id="lensing-y" min="0" max="300" value="100" step="1"
+                                    style="flex:1;">
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <div class="shader-toggle">
                     <label><input type="checkbox" id="toggle-bloom" checked> Bloom</label>

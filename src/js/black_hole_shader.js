@@ -204,10 +204,11 @@ export const lensingFsQuadShader = {
     uniforms: {
         tDiffuse: { value: null },
         uBHCenters: { value: [new THREE.Vector2(0.5, 0.5), new THREE.Vector2(0.5, 0.5), new THREE.Vector2(0.5, 0.5), new THREE.Vector2(0.5, 0.5)] },
-        uBHRadii: { value: [0.1, 0.1, 0.1, 0.1] }, // New: Screen space radii
-        uBHStrengths: { value: [0.0, 0.0, 0.0, 0.0] }, // 0 to 1
+        uBHRadii: { value: [0.1, 0.1, 0.1, 0.1] },
+        uBHStrengths: { value: [0.0, 0.0, 0.0, 0.0] },
+        uBHDistortionScale: { value: new THREE.Vector2(1.0, 1.0) }, // [NEW] XY Split
         uLensingEnabled: { value: 1.0 },
-        uResolution: { value: new THREE.Vector2(1.0, 1.0) } // Screen aspect ratio fix
+        uResolution: { value: new THREE.Vector2(1.0, 1.0) }
     },
     vertexShader: `
         varying vec2 vUv;
@@ -218,11 +219,12 @@ export const lensingFsQuadShader = {
     `,
     fragmentShader: `
         uniform sampler2D tDiffuse;
-        uniform vec2 uBHCenters[4]; // Screen coordinates (0..1)
-        uniform float uBHRadii[4];  // New: Screen radii
+        uniform vec2 uBHCenters[4];
+        uniform float uBHRadii[4];
         uniform float uBHStrengths[4];
+        uniform vec2 uBHDistortionScale; // [NEW]
         uniform float uLensingEnabled;
-        uniform vec2 uResolution; // aspect ratio correction: (width/height, 1.0) or (1.0, height/width)
+        uniform vec2 uResolution;
 
         varying vec2 vUv;
 
@@ -235,47 +237,30 @@ export const lensingFsQuadShader = {
             vec2 finalUv = vUv;
             vec2 displacement = vec2(0.0);
             
-            // Iterate over all possible 4 qubits
             for (int i = 0; i < 4; i++) {
                 if (uBHStrengths[i] > 0.01) {
                     vec2 bhCenter = uBHCenters[i];
                     vec2 vecToBH = vUv - bhCenter;
-                    
-                    // Correct aspect ratio for distance calculation
-                    // assuming resolution.x is aspect ratio (width/height)
                     vec2 aspectCorrectedVec = vecToBH * vec2(uResolution.x / uResolution.y, 1.0);
-                    
                     float r = length(aspectCorrectedVec);
-                    
-                    // Simple "Pinch" Radial Distortion (pull inwards to simulate magnification of background)
-                    // Gravity pulls light towards the mass.
-                    // The image we see at 'r' comes from 'r + alpha' (alpha > 0).
-                    // So we sample from vUv + displacement (displacement pointing AWAY from center).
-                    // If we sample from further out, we are pulling the background IN.
-                    
-                    // Fine-tuning: Dynamic radius uBHRadii[i]
-                    // We MUST mask the center so the Qubit itself is NOT distorted.
-                    // Only distort the "ring" between radius and radius * 1.35.
                     
                     float rMin = uBHRadii[i];
                     float rMax = uBHRadii[i] * 1.35;
                     
                     if (r > rMin && r < rMax) {
-                       // Reduced strength from 0.01 to 0.003 to fix "too augmented" look
                        float strength = uBHStrengths[i] * 0.003; 
                        
                        // 1. Radial Distortion (Lens)
                        vec2 radialDir = normalize(vecToBH);
-                       displacement -= radialDir * (strength / (r + 0.01));
+                       // [MODIFIED] Apply independent X/Y scaling to displacement
+                       vec2 radialDisp = radialDir * (strength / (r + 0.01));
+                       displacement -= radialDisp * uBHDistortionScale;
                        
-                       // 2. Swirl/Twist Distortion (Frame Dragging Mimic)
-                       // Calculate tangential vector (perpendicular to radial)
+                       // 2. Swirl/Twist Distortion
                        vec2 tangentDir = vec2(-radialDir.y, radialDir.x);
-                       
-                       // Swirl factor: stronger closer to the hole
-                       // This mimics light wrapping around the photon sphere
                        float swirl = strength * 2.0; 
-                       displacement += tangentDir * (swirl / (r + 0.01));
+                       vec2 tangentDisp = tangentDir * (swirl / (r + 0.01));
+                       displacement += tangentDisp * uBHDistortionScale;
                     }
                 }
             }

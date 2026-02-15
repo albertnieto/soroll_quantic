@@ -218,7 +218,9 @@ function createParticleSystem() {
     const uniforms = {
         uTime: { value: 0 },
         uStateVector: { value: initialState },
-        uPositions: { value: qubitPosArray }
+        uPositions: { value: qubitPosArray },
+        uOpacity: { value: 0.6 },  // [NEW]
+        uSizeScale: { value: 1.0 }  // [NEW]
     };
 
     const material = new THREE.ShaderMaterial({
@@ -634,19 +636,8 @@ for (let i = 0; i < 4; i++) {
 
                     if (coherentCount === 0) {
                         // This was the last one!
-                        // "after 0.5 secs another collapsed random qubit will be applied a random gate"
-                        setTimeout(() => {
-                            const collapsedQubits = qubits.filter(q => !q.coherent);
-                            if (collapsedQubits.length > 0) {
-                                const randomRevive = collapsedQubits[Math.floor(Math.random() * collapsedQubits.length)];
-                                // Apply random gate to revive it
-                                randomRevive.coherent = true;
-                                randomRevive.alpha = Math.cos(Math.random() * Math.PI);
-                                randomRevive.beta = Math.sin(Math.random() * Math.PI);
-                                randomRevive.phase = Math.random() * Math.PI * 2;
-                                updateQuantumStateDisplay();
-                            }
-                        }, 500);
+                        // [REMOVED] Auto-revive logic as per user request.
+                        // System will remain with all qubits collapsed until manual intervention or mode change/reset.
                     }
                 }
             } else {
@@ -882,17 +873,38 @@ document.getElementById('spacing').addEventListener('input', (e) => {
 });
 
 function updateEdgeMask() {
-    const intensity = document.getElementById('mask-intensity').value / 100;
+    const intensityH = document.getElementById('mask-intensity-h').value / 100;
+    const intensityV = document.getElementById('mask-intensity-v').value / 100;
     const size = document.getElementById('mask-size').value;
     const overlay = document.getElementById('edge-mask-overlay');
-    // We use size as blur and half of size as spread for a soft natural vignette
-    overlay.style.boxShadow = `inset 0 0 ${size}px ${size / 2}px rgba(0, 0, 0, ${intensity})`;
+
+    // Using a radial gradient or multiple shadows to simulate split intensity is tricky with box-shadow alone.
+    // However, we can use a linear gradient or mask-image.
+    // For simplicity with the existing "inset box-shadow" look, we'll average them or use them to scale the shadow.
+    // But the user asked to "split" it. Let's use two inset shadows.
+    overlay.style.boxShadow = `
+        inset ${size}px 0 ${size}px -${size / 2}px rgba(0, 0, 0, ${intensityH}),
+        inset -${size}px 0 ${size}px -${size / 2}px rgba(0, 0, 0, ${intensityH}),
+        inset 0 ${size}px ${size}px -${size / 2}px rgba(0, 0, 0, ${intensityV}),
+        inset 0 -${size}px ${size}px -${size / 2}px rgba(0, 0, 0, ${intensityV})
+    `;
 }
 
-document.getElementById('mask-intensity').addEventListener('input', (e) => {
-    document.getElementById('maskIntensityValue').textContent = e.target.value + '%';
+document.getElementById('mask-intensity-h').addEventListener('input', (e) => {
+    updateMaskLabel();
     updateEdgeMask();
 });
+
+document.getElementById('mask-intensity-v').addEventListener('input', (e) => {
+    updateMaskLabel();
+    updateEdgeMask();
+});
+
+function updateMaskLabel() {
+    const h = document.getElementById('mask-intensity-h').value;
+    const v = document.getElementById('mask-intensity-v').value;
+    document.getElementById('maskIntensityValue').textContent = `H: ${h}% V: ${v}%`;
+}
 
 document.getElementById('mask-size').addEventListener('input', (e) => {
     document.getElementById('maskSizeValue').textContent = e.target.value + 'px';
@@ -936,6 +948,28 @@ document.getElementById('entanglement-volume').addEventListener('input', (e) => 
     const value = e.target.value;
     document.getElementById('entanglement-volume-value').textContent = value + '%';
     quantumSound.setEntanglementVolume(value);
+});
+
+// [NEW] Particle Controls
+document.getElementById('particle-opacity').addEventListener('input', (e) => {
+    if (particleSystem.uniforms) {
+        particleSystem.uniforms.uOpacity.value = e.target.value / 100;
+    }
+});
+
+document.getElementById('particle-size').addEventListener('input', (e) => {
+    if (particleSystem.uniforms) {
+        particleSystem.uniforms.uSizeScale.value = e.target.value / 100;
+    }
+});
+
+// [NEW] Lensing Controls
+document.getElementById('lensing-x').addEventListener('input', (e) => {
+    lensingPass.uniforms.uBHDistortionScale.value.x = e.target.value / 100;
+});
+
+document.getElementById('lensing-y').addEventListener('input', (e) => {
+    lensingPass.uniforms.uBHDistortionScale.value.y = e.target.value / 100;
 });
 
 document.getElementById('gate-sound-style').addEventListener('change', (e) => {
@@ -1295,20 +1329,9 @@ function animate() {
                         qubits[i].collapse(1); // ALWAYS state 1
 
                         // Check if this was the last coherent qubit
-                        const coherentCount = qubits.filter(q => q.coherent).length;
                         if (coherentCount === 0) {
-                            // Schedule revival of a random qubit to keep the loop going
-                            setTimeout(() => {
-                                const collapsedQubits = qubits.filter(q => !q.coherent);
-                                if (collapsedQubits.length > 0) {
-                                    const randomRevive = collapsedQubits[Math.floor(Math.random() * collapsedQubits.length)];
-                                    randomRevive.coherent = true;
-                                    randomRevive.alpha = Math.cos(Math.random() * Math.PI);
-                                    randomRevive.beta = Math.sin(Math.random() * Math.PI);
-                                    randomRevive.phase = Math.random() * Math.PI * 2;
-                                    updateQuantumStateDisplay();
-                                }
-                            }, 500);
+                            // This was the last one!
+                            // [REMOVED] Auto-revive logic as per user request.
                         }
                     }
                 } else {
